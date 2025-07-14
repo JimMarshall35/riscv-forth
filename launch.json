@@ -1,0 +1,18 @@
+
+{
+    "version" : "0.2.0",
+    "configurations" : 
+    {
+        {
+            "name" : "debug risc-v",
+            "type" : "cppdbg",
+            "request" : "launch",
+            "program" : "${workspaceFolder}/hello",
+            "cwd" : "${workspaceFolder}",
+            "miDebuggerPath" : "C:/SysGCC/risc-v/bin/riscv64-unknown-elf-gdb.exe",
+            "miDebuggerServerAddress" : "localhost:1234",
+            "stopAtEntry" : true,
+            "preLaunchTask" : "Run QEMU"
+        }
+    }
+}
