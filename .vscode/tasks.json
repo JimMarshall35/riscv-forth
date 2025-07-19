@@ -1,0 +1,17 @@
+
+{
+    "version" : "2.0.0",
+    "tasks" : 
+    [
+        {
+            "label" : "Build",
+            "type" : "shell",
+            "command" : "C:/SysGCC/risc-v/bin/make.exe"
+        },
+        {
+            "label" : "Run QEMU",
+            "type" : "shell",
+            "command" : "qemu-system-riscv32 -nographic -serial mon:stdio -machine virt -s -S -bios hello"
+        }
+    ]
+}

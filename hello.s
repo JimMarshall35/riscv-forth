@@ -12,11 +12,13 @@ main:
     li a0, UART_BASE
     call initUart
 
-    call vm_init
-
     li a1, UART_BASE
     la a0, helloworld
     call puts
+
+    call vm_init
+
+    
 
  loop:
     j loop
@@ -25,5 +27,5 @@ main:
  
 
 .section .data
-helloworld: .string "Hello World!\n"
+helloworld: .string "Forth - Jim Marshall 2025\n"
 

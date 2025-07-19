@@ -2,6 +2,19 @@
 
 #define VM_STACK_BOUNDS_CHECK
 
+
+    # IMPORTANT! REGISTERS USED BY THE INTERPRETER:
+
+    # Until I can get C Style defines to work you'll just have to read this, assembler.
+    # The following registers must not be touched:
+
+    # s0 - instruction pointer
+    # s1 - data stack base pointer
+    # s2 - data stack size
+    # s3 - return stack base pointer
+    # s4 - return stack size
+
+
 .global vm_init
 
 .equ CELL_SIZE, 4
@@ -16,25 +29,23 @@
 .equ PC_REG, s0
 .equ THREAD_REG, s1
 
+.equ TOKEN_BUFFER_MAX_SIZE, 32
+.equ LINE_BUFFER_MAX_SIZE, 128
+
 
 .data
 
-error_msg_stack_overflow:  .ascii "data stack overflow"
-error_msg_stack_underflow: .ascii "data stack underflow"
-error_msg_return_stack_overflow:  .ascii "return stack overflow"
-error_msg_return_stack_underflow: .ascii "return stack underflow"
+starting_interpreter_string: .ascii "starting outer interpreter...\n"
+waiting_for_key_str: .ascii "waiting for key string...\n\0"
+
+error_msg_stack_overflow:  .ascii "data stack overflow\n\0"
+error_msg_stack_underflow: .ascii "data stack underflow\n\0"
+error_msg_return_stack_overflow:  .ascii "return stack overflow\n\0"
+error_msg_return_stack_underflow: .ascii "return stack underflow\n\0"
 
 
 vm_data_stack: .fill DATA_STACK_MAX_SIZE, CELL_SIZE, 0      # 32 cell stack size
 vm_return_stack: .fill RETURN_STACK_MAX_SIZE, CELL_SIZE, 0  # 64 cell return stack size
-
-# data stack
-vm_p_data_stack_base: .word 0
-vm_data_stack_size: .word 0
-
-# return stack
-vm_p_return_stack_base: .word 0
-vm_return_stack_size: .word 0
 
 # dictionary
 vm_p_dictionary_start: .word 0
@@ -48,41 +59,40 @@ li \regTemp, CELL_SIZE
 div \regOut, \regSize, \regTemp 
 .endm
 
-.macro PushStack regBase, regSize, regVal
-#ifdef VM_STACK_BOUNDS_CHECK
-    li t0, DATA_STACK_MAX_SIZE_BYTES
-    bge \regSize, t0, 1f
-    j 2
-1:
-    l1 t0, vm_str_error_message
-    la t1, error_msg_stack_underflow
-    sw t1, 0(t0)
-    call vm_error_handler
-2:
-#endif
-    add \regBase, \regBase, \regSize
-    sw \regVal, 0(\regBase)
-    addi \regSize, \regSize, CELL_SIZE
 
+.macro PushStack regBase, regSize, regVal
+
+    add t0, \regBase, \regSize
+    sw \regVal, 0(t0)
+    addi \regSize, \regSize, CELL_SIZE
 .endm
 
 .macro PopStack regBase, regSize, regOutVal
     addi \regSize, \regSize, -CELL_SIZE
-#ifdef VM_STACK_BOUNDS_CHECK
-    blt \regSize, \regBase, 1f
-    j 2f
-1:
-    la t0, vm_str_error_message
-    la t1, error_msg_stack_underflow
-    sw t1, 0(t0)
-    call vm_error_handler
-2:
-#endif
-    add \regBase, \regBase, \regSize
-    lw \regOutVal, 0(\regBase)
+    add t0, \regBase, \regSize
+    lw \regOutVal, 0(t0)
+.endm
+#     s0 - instruction pointer
+#     s1 - data stack base pointer
+#     s2 - data stack size
+#     s3 - return stack base pointer
+#     s4 - return stack size
+
+.macro PushDataStack regVal
+    PushStack s1, s2, \regVal
 .endm
 
+.macro PopDataStack regOutVal
+    PopStack s1, s2, \regOutVal
+.endm
 
+.macro PushReturnStack regVal
+    PushStack s3, s4, \regVal
+.endm
+
+.macro PopReturnStack regOutVal
+    PopStack s3, s4, \regOutVal
+.endm
 
 .macro padded_string string, max
 1:
@@ -150,9 +160,9 @@ div \regOut, \regSize, \regTemp
 \name\()_impl:
 .endm
 
-.equ OFFSET_NAME, 32
-.equ OFFSET_CODE, 32
-.equ OFFSET_NEXT, 64
+.equ OFFSET_NAME, 0
+.equ OFFSET_CODE, HEADER_NAME_BUF_SIZE
+.equ OFFSET_NEXT, (HEADER_NAME_BUF_SIZE + HEADER_CODE_BUF_SIZE)
 .equ OFFSET_PREV, (64 + CELL_SIZE)
 .equ OFFSET_IMM, (64 + 2*CELL_SIZE)
 
@@ -204,6 +214,7 @@ find_dict_end:
 
 vm_init:
     SaveReturnAddress
+
     # init dictionary
     la t0, vm_p_dictionary_start
     la t1, emit
@@ -216,40 +227,168 @@ vm_init:
     sw a1, 0(t0)
 
     # init stacks
-    la t0, vm_p_data_stack_base
-    la t1, vm_data_stack
-    sw t1, 0(t0)
+    la s1, vm_data_stack
+    li s2, 0
+    la s3, vm_return_stack
+    la s4, 0
 
-    la t0, vm_p_return_stack_base
-    la t1, vm_return_stack
-    sw t1, 0(t0)
-    
+    la t0, lineBufferSize_data
+    sw zero, 0(t0)
+
+    la t0, tokenBufferSize_data
+    sw zero, 0(t0)
+
+    la a0, lineBuffer_data
+    li a1, 0
+    li a2, LINE_BUFFER_MAX_SIZE
+    call memset
+
+    la a0, tokenBuffer_data
+    li a1, 0
+    li a2, TOKEN_BUFFER_MAX_SIZE
+    call memset
+
+    call outerInterpreter_impl
+
     RestoreReturnAddress
     ret
 
 .macro end_word
-    addi s0, s0, 1
-    jal ra, vm_next
+    addi s0, s0, CELL_SIZE
+    lw t0, 0(s0)
+    jalr ra, t0, 0
 .endm
 
-vm_next:
-    li t1, CELL_SIZE
-    mul t0, s0, t1
-    add t0, s1, t0
-    jalr ra, t0, 0
-    ret
-
 word_header_first emit,   emit,     0, key
-    la t0, vm_data_stack
-    la t1, vm_data_stack_size
-    lw t1, 0(t1)
-    PopStack t0, t1, a0
+    PopDataStack a0
     li a1, UART_BASE
     call putc
     end_word
 
-word_header       key,    key,      0, load, emit
-    li a0, UART_BASE
-    call getc_block
+word_header       key,    key,      0, tokenBuffer, emit
     
-word_header_last  load,   "@",      0, key
+
+    li a0, UART_BASE
+    call getc_block         # char in a0
+    PushDataStack a0
+    
+    end_word
+
+word_header tokenBuffer, tokenbuffer, 0, lineBuffer, key
+    la t0, tokenBuffer_data
+    PushDataStack t0
+    end_word
+tokenBuffer_data:
+    .fill TOKEN_BUFFER_MAX_SIZE, 1, 0
+
+#                                                 
+word_header lineBuffer, lineBuffer, 0, lineBufferSize, tokenBuffer
+    la t0, lineBuffer_data
+    PushDataStack t0
+    end_word
+lineBuffer_data:
+    .fill LINE_BUFFER_MAX_SIZE, 1, 0
+
+word_header lineBufferSize, lineBufferSize, 0, loadCell, lineBuffer
+    la t0, lineBufferSize_data
+    PushDataStack t0
+    end_word
+lineBufferSize_data:
+    .word
+    
+word_header loadCell, @, 0, store, lineBufferSize
+    PopDataStack t2
+    lw t3, 0(t2)
+    PushDataStack t3
+    end_word
+
+word_header store, !, 0, loadByte, loadCell
+    PopDataStack t2
+    PopDataStack t3
+    sw t3, 0(t2)
+    end_word
+    
+word_header loadByte, c@, 0, storeByte, store
+    PopDataStack t2
+    lb t3, 0(t2)
+    PushDataStack t3
+    end_word
+
+word_header storeByte, c!, 0, branchIfZero, loadByte
+    PopDataStack t2
+    PopDataStack t3
+    sb t3, 0(t2)
+    end_word
+
+word_header branchIfZero, b0, 0, branch, storeByte
+    PopDataStack t0
+    mv t1, s0 # s0 == PC
+    beq t0, zero, 1f
+    # no branch
+    addi s0, s0, 1 # skip over literal
+    j 2f
+1:
+    addi t1, t1, CELL_SIZE # get literal
+    lw t1, 0(t1)
+    add s0, s0, t1         # add literal to PC
+2:
+    end_word
+
+word_header branch, b, 0, forth_add, branchIfZero
+    mv t1, s0
+    addi t1, t1, CELL_SIZE # get literal
+    lw t1, 0(t1)
+    add s0, s0, t1         # add literal to PC
+    end_word
+
+word_header forth_add, +, 0, outerInterpreter, branch
+    PopDataStack t2
+    PopDataStack t3
+    add t0, t2, t3
+    PushDataStack t0
+    end_word
+
+word_header outerInterpreter, outerInterpreter, 0, literal, forth_add
+    la a0, starting_interpreter_string
+    li a1, UART_BASE
+    call puts 
+    la s0, outerInterpreter_ThreadBegin
+    lw t0, 0(s0)
+    jalr ra, t0, 0
+outerInterpreter_ThreadBegin:
+    .word key_impl                      # ( char )
+    .word dup_impl                      # ( char char )
+    .word lineBufferSize_impl           # ( char char &lineBufferSize )
+    .word loadCell_impl                 # ( char char lineBufferSize )
+    .word lineBuffer_impl               # ( char char lineBufferSize lineBuffer )
+    .word forth_add_impl                # ( char char lineBufferSize+lineBuffer )
+    .word storeByte_impl                # ( char )
+    .word emit_impl                     # ( char )
+    .word branch_impl 
+    .word - (9 * CELL_SIZE)
+
+    # .word key
+    # .word literal
+    # .word 1
+    # .word forth_add
+    # .word lineBufferSize
+    # .word key
+
+
+
+word_header literal, literal, 0, dup, outerInterpreter
+    addi s0, s0, CELL_SIZE
+    lw t3, 0(s0)
+
+word_header dup, dup, 0, tokenBufferSize, literal
+    PopDataStack t2
+    PushDataStack t2
+    PushDataStack t2
+    end_word
+
+word_header_last tokenBufferSize, tokenBufferSize, 0, dup
+    la t0, tokenBufferSize_data
+    PushDataStack t0
+    end_word
+tokenBufferSize_data:
+    .word

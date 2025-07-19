@@ -17,6 +17,8 @@
 .global getc_block
 .global initUart
 
+.text
+
 # "ns16550a compatible" UART DRIVER
 
 initUart:

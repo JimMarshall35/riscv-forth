@@ -2,7 +2,7 @@
 {
     "version" : "0.2.0",
     "configurations" : 
-    {
+    [
         {
             "name" : "debug risc-v",
             "type" : "cppdbg",
@@ -14,5 +14,6 @@
             "stopAtEntry" : true,
             "preLaunchTask" : "Run QEMU"
         }
-    }
+
+    ]
 }
