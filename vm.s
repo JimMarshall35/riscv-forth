@@ -27,7 +27,6 @@
 .equ DATA_STACK_MAX_SIZE_BYTES, (DATA_STACK_MAX_SIZE * CELL_SIZE)
 
 .equ PC_REG, s0
-.equ THREAD_REG, s1
 
 .equ TOKEN_BUFFER_MAX_SIZE, 32
 .equ LINE_BUFFER_MAX_SIZE, 128
@@ -35,7 +34,7 @@
 
 .data
 
-starting_interpreter_string: .ascii "starting outer interpreter...\n"
+starting_interpreter_string: .ascii "starting outer interpreter...\n\0"
 waiting_for_key_str: .ascii "waiting for key string...\n\0"
 
 error_msg_stack_overflow:  .ascii "data stack overflow\n\0"
@@ -160,6 +159,14 @@ div \regOut, \regSize, \regTemp
 \name\()_impl:
 .endm
 
+.macro secondary_word name
+    PushReturnStack s0
+    la s0, \name\()_ThreadBegin
+    lw t0, 0(s0)
+    jalr ra, t0, 0
+\name\()_ThreadBegin:
+.endm
+
 .equ OFFSET_NAME, 0
 .equ OFFSET_CODE, HEADER_NAME_BUF_SIZE
 .equ OFFSET_NEXT, (HEADER_NAME_BUF_SIZE + HEADER_CODE_BUF_SIZE)
@@ -266,32 +273,28 @@ word_header_first emit,   emit,     0, key
     end_word
 
 word_header       key,    key,      0, tokenBuffer, emit
-    
-
     li a0, UART_BASE
     call getc_block         # char in a0
     PushDataStack a0
-    
     end_word
 
 word_header tokenBuffer, tokenbuffer, 0, lineBuffer, key
-    la t0, tokenBuffer_data
-    PushDataStack t0
+    la t1, tokenBuffer_data
+    PushDataStack t1
     end_word
 tokenBuffer_data:
     .fill TOKEN_BUFFER_MAX_SIZE, 1, 0
-
-#                                                 
+                                           
 word_header lineBuffer, lineBuffer, 0, lineBufferSize, tokenBuffer
-    la t0, lineBuffer_data
-    PushDataStack t0
+    la t1, lineBuffer_data
+    PushDataStack t1
     end_word
 lineBuffer_data:
     .fill LINE_BUFFER_MAX_SIZE, 1, 0
 
 word_header lineBufferSize, lineBufferSize, 0, loadCell, lineBuffer
-    la t0, lineBufferSize_data
-    PushDataStack t0
+    la t1, lineBufferSize_data
+    PushDataStack t1
     end_word
 lineBufferSize_data:
     .word
@@ -321,11 +324,11 @@ word_header storeByte, c!, 0, branchIfZero, loadByte
     end_word
 
 word_header branchIfZero, b0, 0, branch, storeByte
-    PopDataStack t0
+    PopDataStack t2
     mv t1, s0 # s0 == PC
-    beq t0, zero, 1f
+    beq t2, zero, 1f
     # no branch
-    addi s0, s0, 1 # skip over literal
+    addi s0, s0, CELL_SIZE # skip over literal
     j 2f
 1:
     addi t1, t1, CELL_SIZE # get literal
@@ -344,18 +347,13 @@ word_header branch, b, 0, forth_add, branchIfZero
 word_header forth_add, +, 0, outerInterpreter, branch
     PopDataStack t2
     PopDataStack t3
-    add t0, t2, t3
-    PushDataStack t0
+    add t2, t2, t3
+    PushDataStack t2
     end_word
 
 word_header outerInterpreter, outerInterpreter, 0, literal, forth_add
-    la a0, starting_interpreter_string
-    li a1, UART_BASE
-    call puts 
-    la s0, outerInterpreter_ThreadBegin
-    lw t0, 0(s0)
-    jalr ra, t0, 0
-outerInterpreter_ThreadBegin:
+    secondary_word outerInterpreter
+ outer_start:
     .word key_impl                      # ( char )
     .word dup_impl                      # ( char char )
     .word lineBufferSize_impl           # ( char char &lineBufferSize )
@@ -363,22 +361,51 @@ outerInterpreter_ThreadBegin:
     .word lineBuffer_impl               # ( char char lineBufferSize lineBuffer )
     .word forth_add_impl                # ( char char lineBufferSize+lineBuffer )
     .word storeByte_impl                # ( char )
+    .word dup_impl                      # ( char char )
     .word emit_impl                     # ( char )
-    .word branch_impl 
-    .word - (9 * CELL_SIZE)
+    .word literal_impl 
+    .word 0x7f                          # ( char 0x7f )
+    .word forth_minus_impl              # ( areEqual )
+1:  .word branchIfZero_impl                  
+    .word  3*CELL_SIZE#((backspace_entered - 1b) + 1 * CELL_SIZE)
+1:  .word branch_impl 
+    .word - ((1b - outer_start) + 1 * CELL_SIZE)
+backspace_entered:
+    .word literal_impl 
+    .word 8                             # ( 8 )
+    .word dup_impl                      # ( 8 8 )
+    .word emit_impl                     # ( 8 )
+    .word emit_impl                     # ( )
+    
+    .word literal_impl
+    .word 32                            # ( 32 )
+    .word dup_impl                      # ( 8 8 )
+    .word emit_impl                     # ( 8 )
+    .word emit_impl                     # ( )
 
-    # .word key
-    # .word literal
-    # .word 1
-    # .word forth_add
-    # .word lineBufferSize
-    # .word key
+    .word literal_impl 
+    .word 8                             # ( 8 )
+    .word dup_impl                      # ( 8 8 )
+    .word emit_impl                     # ( 8 )
+    .word emit_impl                     # ( )
 
 
+    .word lineBufferSize_impl           # ( &lineBufferSize )
+    .word dup_impl                      # ( &lineBufferSize &lineBufferSize )
+    .word loadCell_impl                 # ( &lineBufferSize lineBufferSize )
+    .word literal_impl
+    .word 1                             # ( &lineBufferSize lineBufferSize 1 )
+    .word forth_minus_impl              # ( &lineBufferSize newLineBufferSize )
+    .word swap_impl                     # ( newLineBufferSize &lineBufferSize )
+    .word store_impl                    # ( )
+1:  .word branch_impl 
+    .word - ((1b - outer_start) + 1 * CELL_SIZE)
 
 word_header literal, literal, 0, dup, outerInterpreter
     addi s0, s0, CELL_SIZE
     lw t3, 0(s0)
+    PushDataStack t3
+    end_word
 
 word_header dup, dup, 0, tokenBufferSize, literal
     PopDataStack t2
@@ -386,9 +413,27 @@ word_header dup, dup, 0, tokenBufferSize, literal
     PushDataStack t2
     end_word
 
-word_header_last tokenBufferSize, tokenBufferSize, 0, dup
-    la t0, tokenBufferSize_data
-    PushDataStack t0
+word_header tokenBufferSize, tokenBufferSize, 0, return, dup
+    la t1, tokenBufferSize_data
+    PushDataStack t1
     end_word
 tokenBufferSize_data:
     .word
+    
+word_header return, return, 0, forth_minus, tokenBufferSize
+    PopReturnStack s0
+    end_word
+
+word_header forth_minus, -, 0, swap, return
+    PopDataStack t2
+    PopDataStack t3
+    sub t3, t3, t2
+    PushDataStack t3
+    end_word
+    
+word_header_last swap, swap, 0, forth_minus
+    PopDataStack t2
+    PopDataStack t3
+    PushDataStack t2
+    PushDataStack t3
+    end_word
