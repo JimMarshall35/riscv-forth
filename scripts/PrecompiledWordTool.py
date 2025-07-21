@@ -1,3 +1,14 @@
+# Precompiled Word Tool
+# - Add new precompiled forth words to source file
+#   - Automatically updates next and prev pointers
+#   - Saves file to vmOut.S
+# - Statically analyse word linkage, make sure its correct
+# - Lists forth words present in source file
+# FUTURE WORK:
+# - flag to add in end_word macro (or make this the default and have the flag to disable)
+# - More static analysis: determine type of word, is it primative, 
+#   secondary, or a variable. If secondary are thread pointers pointing to valid word implementations (and NOT the header itself)
+
 import argparse
 from enum import Enum
 

@@ -266,6 +266,18 @@ vm_init:
     jalr ra, t0, 0
 .endm
 
+# Following 2 macros used to calculate branch labels within pre-compiled secondary words
+.macro CalcBranchBackToLabel label
+    # ASSUMES THAT 1b IS A LABEL TO THE BRANCH OR BRANCHZERO IMPLEMENTATION POINTER
+    .word - (( 1b - \label ) + 1 * CELL_SIZE)
+.endm
+
+.macro CalcBranchForwardToLabel label
+    # ASSUMES THAT 1b IS A LABEL TO THE BRANCH OR BRANCHZERO IMPLEMENTATION POINTER
+    .word (( \label - 1b) - 1 * CELL_SIZE)
+.endm
+
+
 word_header_first emit,   emit,     0, key
     PopDataStack a0
     li a1, UART_BASE
@@ -363,33 +375,48 @@ word_header outerInterpreter, outerInterpreter, 0, literal, forth_add
     .word storeByte_impl                # ( char )
     .word dup_impl                      # ( char char )
     .word emit_impl                     # ( char )
+    .word dup_impl                      # ( char char )
     .word literal_impl 
-    .word 0x7f                          # ( char 0x7f )
+    .word 0x7f                          # ( char char 0x7f )
+    .word forth_minus_impl              # ( char areEqual )
+1:  .word branchIfZero_impl                  
+    CalcBranchForwardToLabel backspace_entered
+    .word literal_impl 
+    .word 0xD                           # ( char 0xd )
     .word forth_minus_impl              # ( areEqual )
 1:  .word branchIfZero_impl                  
-    .word  3*CELL_SIZE#((backspace_entered - 1b) + 1 * CELL_SIZE)
+    CalcBranchForwardToLabel enter_entered
+
+    # increment lineBufferSize - a non-enter non-backspace character has been entered
+    .word literal_impl
+    .word 1
+    .word lineBufferSize_impl
+    .word loadCell_impl
+    .word forth_add_impl
+    .word lineBufferSize_impl
+    .word store_impl
+
 1:  .word branch_impl 
-    .word - ((1b - outer_start) + 1 * CELL_SIZE)
+    CalcBranchBackToLabel outer_start
 backspace_entered:
+    # emit
     .word literal_impl 
-    .word 8                             # ( 8 )
+    .word 8                             # ( 8 )     
     .word dup_impl                      # ( 8 8 )
     .word emit_impl                     # ( 8 )
     .word emit_impl                     # ( )
-    
     .word literal_impl
     .word 32                            # ( 32 )
     .word dup_impl                      # ( 8 8 )
     .word emit_impl                     # ( 8 )
     .word emit_impl                     # ( )
-
     .word literal_impl 
     .word 8                             # ( 8 )
     .word dup_impl                      # ( 8 8 )
     .word emit_impl                     # ( 8 )
     .word emit_impl                     # ( )
 
-
+    # decrement lineBufferSize
     .word lineBufferSize_impl           # ( &lineBufferSize )
     .word dup_impl                      # ( &lineBufferSize &lineBufferSize )
     .word loadCell_impl                 # ( &lineBufferSize lineBufferSize )
@@ -399,7 +426,18 @@ backspace_entered:
     .word swap_impl                     # ( newLineBufferSize &lineBufferSize )
     .word store_impl                    # ( )
 1:  .word branch_impl 
-    .word - ((1b - outer_start) + 1 * CELL_SIZE)
+    CalcBranchBackToLabel outer_start
+enter_entered:
+    .word literal_impl 
+    .word 10                            # ( 10 )
+    .word emit_impl                     # ( )
+    # call a forth word called "DoString" here, passing in linebuffer and linebuffersize
+    .word literal_impl
+    .word 0                             # ( 0 )
+    .word lineBufferSize_impl           # ( 0 &lineBufferSize )
+    .word store_impl                    # ( )
+1:  .word branch_impl 
+    CalcBranchBackToLabel outer_start
 
 word_header literal, literal, 0, dup, outerInterpreter
     addi s0, s0, CELL_SIZE
@@ -437,3 +475,6 @@ word_header_last swap, swap, 0, forth_minus
     PushDataStack t2
     PushDataStack t3
     end_word
+
+
+    
