@@ -1,3 +1,6 @@
+import argparse
+from enum import Enum
+
 # Precompiled Word Tool
 # - Add new precompiled forth words to source file
 #   - Automatically updates next and prev pointers
@@ -9,8 +12,6 @@
 # - More static analysis: determine type of word, is it primative, 
 #   secondary, or a variable. If secondary are thread pointers pointing to valid word implementations (and NOT the header itself)
 
-import argparse
-from enum import Enum
 
 def do_cmd_args():
     parser = argparse.ArgumentParser(
@@ -289,6 +290,7 @@ def main():
 
     word_headers, allLines = parse_lines(as_file)
     as_file.close()
+    print(word_headers)
     if validate_macro_types(word_headers):
         print("valid macro types")
     else:

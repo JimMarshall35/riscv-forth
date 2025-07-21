@@ -431,7 +431,11 @@ enter_entered:
     .word literal_impl 
     .word 10                            # ( 10 )
     .word emit_impl                     # ( )
-    # call a forth word called "DoString" here, passing in linebuffer and linebuffersize
+
+    .word lineBuffer_impl               # ( lineBuffer )
+    .word lineBufferSize_impl           # ( lineBuffer &lineBufferSize )
+    .word loadCell_impl                 # ( lineBuffer lineBufferSize )
+    .word eval_impl                     # ( )
     .word literal_impl
     .word 0                             # ( 0 )
     .word lineBufferSize_impl           # ( 0 &lineBufferSize )
@@ -469,7 +473,7 @@ word_header forth_minus, -, 0, swap, return
     PushDataStack t3
     end_word
     
-word_header_last swap, swap, 0, forth_minus
+word_header swap, swap, 0, eval, forth_minus
     PopDataStack t2
     PopDataStack t3
     PushDataStack t2
@@ -477,4 +481,14 @@ word_header_last swap, swap, 0, forth_minus
     end_word
 
 
-    
+word_header eval, eval, 0, drop, swap
+    secondary_word eval
+    # mock eval implementation
+    .word drop_impl
+    .word drop_impl
+    .word return_impl
+
+
+word_header_last drop, drop, 0, eval
+    PopDataStack t1
+    end_word
