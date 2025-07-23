@@ -170,8 +170,8 @@ div \regOut, \regSize, \regTemp
 .equ OFFSET_NAME, 0
 .equ OFFSET_CODE, HEADER_NAME_BUF_SIZE
 .equ OFFSET_NEXT, (HEADER_NAME_BUF_SIZE + HEADER_CODE_BUF_SIZE)
-.equ OFFSET_PREV, (64 + CELL_SIZE)
-.equ OFFSET_IMM, (64 + 2*CELL_SIZE)
+.equ OFFSET_PREV, (OFFSET_NEXT + CELL_SIZE)
+.equ OFFSET_IMM, (OFFSET_PREV + CELL_SIZE)
 
 .macro word_next regPtrHeader, regPtrOut
     addi \regPtrOut, \regPtrHeader, OFFSET_NEXT
@@ -255,6 +255,7 @@ vm_init:
     li a2, TOKEN_BUFFER_MAX_SIZE
     call memset
 
+    la s0, outerInterpreter_impl
     call outerInterpreter_impl
 
     RestoreReturnAddress
@@ -483,12 +484,135 @@ word_header swap, swap, 0, eval, forth_minus
 
 word_header eval, eval, 0, drop, swap
     secondary_word eval
-    # mock eval implementation
+    # ( stringPtr stringSize ) 
+eval_start:
+    .word dup_impl            # ( stringPtr stringSize stringSize ) 
+1:  .word branchIfZero_impl    # ( stringPtr stringSize ) 
+    CalcBranchForwardToLabel end_eval
+    .word swap_impl            # ( stringSize stringPtr )
+    .word dup_impl             # ( stringSize stringPtr stringPtr )
+    .word loadByte_impl        # ( stringSize stringPtr char )
+    .word dup_impl             # ( stringSize stringPtr char char )
+    .word literal_impl
+    .word 32                   # ( stringSize stringPtr char char 32 )
+    .word forth_minus_impl     # ( stringSize stringPtr char 0ifequal )
+1:  .word branchIfZero_impl    # ( stringSize stringPtr char )
+    CalcBranchForwardToLabel whitespace
+
+    .word tokenBuffer_impl     # ( stringSize stringPtr char tokenBuffer )
+    .word tokenBufferSize_impl # ( stringSize stringPtr char tokenBuffer &tokenBufferSize )
+    .word loadCell_impl        # ( stringSize stringPtr char tokenBuffer tokenBufferSize )
+    .word forth_add_impl       # ( stringSize stringPtr char tokenBuffer+tokenBufferSize )
+    .word storeByte_impl       # ( stringSize stringPtr )
+    .word tokenBufferSize_impl # ( stringSize stringPtr &tokenBufferSize )
+    .word loadCell_impl        # ( stringSize stringPtr tokenBufferSize )
+    .word literal_impl         
+    .word 1                    # ( stringSize stringPtr tokenBufferSize 1 )
+    .word forth_add_impl       # ( stringSize stringPtr tokenBufferSize+1 )
+    .word tokenBufferSize_impl # ( stringSize stringPtr tokenBufferSize+1 &tokenBufferSize )
+    .word store_impl           # ( stringSize stringPtr )
+    .word literal_impl         
+    .word 1                    # ( stringSize stringPtr 1 )
+    .word forth_add_impl       # ( stringSize stringPtr+1 )
+    .word swap_impl             # ( stringPtr+1 stringSize )
+    .word literal_impl          
+    .word 1                     # ( stringPtr+1 stringSize 1 )
+    .word forth_minus_impl      # ( stringPtr+1 stringSize-1 )
+1:  .word branch_impl
+    CalcBranchBackToLabel eval_start
+whitespace:
+    .word drop_impl             # ( stringSize stringPtr )
+    .word tokenBufferSize_impl  # ( stringSize stringPtr &tokenBufferSize )
+    .word loadCell_impl         # ( stringSize stringPtr tokenBufferSize )
+1:  .word branchIfZero_impl     # ( stringSize stringPtr )
+    CalcBranchForwardToLabel whitespace_end
+    # lookup token here
+    #.word dup2_impl            
+    .word tokenBufferSize_impl  # ( stringSize stringPtr &tokenBufferSize )
+    .word loadCell_impl         # ( stringSize stringPtr tokenBufferSize )
+    .word tokenBuffer_impl      # ( stringSize stringPtr tokenBufferSize tokenBufferPtr )
+    .word findXT_impl           # ( stringSize stringPtr xt )
+    .word dup_impl              # ( stringSize stringPtr xt xt )
+1:  .word branchIfZero_impl     # ( stringSize stringPtr xt )
+    CalcBranchForwardToLabel wordnotfound
+wordfound:
+    # word found
+    .word doWordFound_impl      # ( stringSize stringPtr )
+1:  .word branch_impl
+    CalcBranchForwardToLabel wordfound_end
+wordnotfound:
+    .word drop_impl               # ( stringSize stringPtr )
+    .word dup2_impl               # ( stringSize stringPtr stringSize stringPtr )
+    .word doPossibleNumToken_impl # ( stringSize stringPtr )
+wordfound_end:
+    # reset tokenbuffersize
+    .word literal_impl 
+    .word 0                     # ( stringSize stringPtr 0 )
+    .word tokenBufferSize_impl  # ( stringSize stringPtr 0 &tokenBufferSize )
+    .word store_impl            # ( stringSize stringPtr )
+whitespace_end:
+    .word literal_impl         
+    .word 1                     # ( stringSize stringPtr 1 )
+    .word forth_add_impl        # ( stringSize stringPtr+1 )
+
+    .word swap_impl             # ( stringPtr+1 stringSize )
+    .word literal_impl          
+    .word 1                     # ( stringPtr+1 stringSize 1 )
+    .word forth_minus_impl      # ( stringPtr+1 stringSize-1 )
+1:  .word branch_impl           
+    CalcBranchBackToLabel eval_start
+end_eval:
     .word drop_impl
     .word drop_impl
     .word return_impl
 
 
-word_header_last drop, drop, 0, eval
+word_header drop, drop, 0, dup2, eval
     PopDataStack t1
     end_word
+    
+word_header dup2, "2dup", 0, findXT, drop
+    PopDataStack t1
+    PopDataStack t2
+    PushDataStack t2
+    PushDataStack t1
+    PushDataStack t2
+    PushDataStack t1
+    end_word
+    
+word_header findXT, findXT, 0, doPossibleNumToken, dup2
+    PopDataStack t5   # t5 == string ptr
+    PopDataStack t6   # t6 == string length
+    mv a0, t5
+    mv a1, t6
+    call print_forth_string
+    la t4, vm_p_dictionary_end
+    lw t4, 0(t4)
+1:
+    word_code t4, t2
+    mv a0, t2
+    mv a1, t5
+    mv a2, t6
+    call strcmp_fs_cs
+    bne a3, zero, 3f # its a match! 
+    lw t1, OFFSET_PREV(t4)
+    beq t1, zero, 2f
+    mv t4, t1
+    j 1b
+2: 
+    PushDataStack zero
+    end_word
+3:
+    PushDataStack t4
+    end_word
+        
+word_header doPossibleNumToken, doPossibleNumToken, 0, doWordFound, findXT
+    secondary_word doPossibleNumToken
+    .word drop_impl
+    .word drop_impl
+    .word return_impl
+    
+word_header_last doWordFound, doWordFound, 0, doPossibleNumToken
+    secondary_word doWordFound
+    .word drop_impl
+    .word return_impl
