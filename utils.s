@@ -161,27 +161,27 @@ strcmp_fs_cs:
     # Returns:
     # a3 - 1 if string 1 contents == string 2 contents else 0
     SaveReturnAddress
+#     li a3, 0
+#     mv t0, a0      # t0 == cstring
+#     mv t1, a1      # t1 == fstring
+#     mv t2, a2      # t2 == fstring length
+
+#     call strlen 
+#     mv t3, a1      # t3 == cstring length
+
+#     bne t2, t3, 1f   
+
+#     # lengths are equal
+# 2:
+#     lw a0, 0(t0)
+#     lw a1, 0(t1)
+#     bne a0, a1, 1f
+#     addi t0, t0, 1
+#     addi t1, t1, 1
+#     addi t2, t2, -1
+#     bne t2, zero, 2b
+#     li a3, 1
+# 1:
     li a3, 0
-    mv t0, a0      # t0 == cstring
-    mv t1, a1      # t1 == fstring
-    mv t2, a2      # t2 == fstring length
-
-    call strlen 
-    mv t3, a1      # t3 == cstring length
-
-    bne t2, t3, 1f   
-
-    # lengths are equal
-2:
-    lw a0, 0(t0)
-    lw a1, 0(t1)
-    bne a0, a1, 1f
-    addi t0, t0, 1
-    addi t1, t1, 1
-    addi t2, t2, -1
-    bne t2, zero, 2b
-    li a3, 1
-1:
-    
     RestoreReturnAddress
     ret

@@ -18,8 +18,6 @@ main:
 
     call vm_init
 
-    
-
  loop:
     j loop
     

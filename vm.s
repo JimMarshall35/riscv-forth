@@ -111,7 +111,6 @@ div \regOut, \regSize, \regTemp
 #
 # struct Header
 # {
-#     char name[HEADER_NAME_BUF_SIZE];       // the name that is used to generate assembler labels
 #     char code[HEADER_CODE_BUF_SIZE];       // the code you write when you write forth 
 #     struct Header* next;
 #     struct Header* prev;
@@ -120,7 +119,6 @@ div \regOut, \regSize, \regTemp
 
 .macro word_header_unitialised name, code, immediate
 \name:
-    padded_string \name, HEADER_NAME_BUF_SIZE
     padded_string \code, HEADER_CODE_BUF_SIZE
     .word 0
     .word 0
@@ -130,7 +128,6 @@ div \regOut, \regSize, \regTemp
 
 .macro word_header_last name, code, immediate, prev
 \name:
-    padded_string \name, HEADER_NAME_BUF_SIZE
     padded_string \code, HEADER_CODE_BUF_SIZE
     .word 0
     .word \prev
@@ -141,7 +138,6 @@ div \regOut, \regSize, \regTemp
 
 .macro word_header_first name, code, immediate, next
 \name:
-    padded_string \name, HEADER_NAME_BUF_SIZE
     padded_string \code, HEADER_CODE_BUF_SIZE
     .word \next
     .word 0
@@ -151,7 +147,6 @@ div \regOut, \regSize, \regTemp
 
 .macro word_header name, code, immediate, next, prev
 \name:
-    padded_string \name, HEADER_NAME_BUF_SIZE
     padded_string \code, HEADER_CODE_BUF_SIZE
     .word \next
     .word \prev
@@ -167,9 +162,8 @@ div \regOut, \regSize, \regTemp
 \name\()_ThreadBegin:
 .endm
 
-.equ OFFSET_NAME, 0
-.equ OFFSET_CODE, HEADER_NAME_BUF_SIZE
-.equ OFFSET_NEXT, (HEADER_NAME_BUF_SIZE + HEADER_CODE_BUF_SIZE)
+.equ OFFSET_CODE, 0
+.equ OFFSET_NEXT, (HEADER_CODE_BUF_SIZE)
 .equ OFFSET_PREV, (OFFSET_NEXT + CELL_SIZE)
 .equ OFFSET_IMM, (OFFSET_PREV + CELL_SIZE)
 
@@ -183,10 +177,6 @@ div \regOut, \regSize, \regTemp
 
 .macro word_imm regPtrHeader, regPtrOut
     addi \regPtrOut, \regPtrHeader, OFFSET_IMM
-.endm
-
-.macro word_name regPtrHeader, regPtrOut
-    mv \regPtrOut, \regPtrHeader
 .endm
 
 .macro word_code regPtrHeader, regPtrOut
@@ -528,6 +518,7 @@ whitespace:
     CalcBranchForwardToLabel whitespace_end
     # lookup token here
     #.word dup2_impl            
+tokenBufferLookup:
     .word tokenBufferSize_impl  # ( stringSize stringPtr &tokenBufferSize )
     .word loadCell_impl         # ( stringSize stringPtr tokenBufferSize )
     .word tokenBuffer_impl      # ( stringSize stringPtr tokenBufferSize tokenBufferPtr )
@@ -561,9 +552,24 @@ whitespace_end:
     .word forth_minus_impl      # ( stringPtr+1 stringSize-1 )
 1:  .word branch_impl           
     CalcBranchBackToLabel eval_start
-end_eval:
+end_eval:        
+                               # ( stringPtr stringSize ) 
+    .word tokenBufferSize_impl # ( stringPtr stringSize &tokenBufferSize )
+    .word loadCell_impl        # ( stringPtr stringSize tokenBufferSize )
+1:  .word branchIfZero_impl    # ( stringPtr stringSize )
+    CalcBranchForwardToLabel tokenBufferEmpty
+    # token buffer not empty, go back into the loop to deal with it
+    .word drop_impl            # ( stringPtr )
+    # set stringlength back to 1 so that the loop terminates after 1 go round
+    .word literal_impl
+    .word 1                    # ( stringPtr stringSize=1 )
+    # at the point we're going to jump to they're swapped for some reason
+    .word swap_impl            # ( stringSize=1 stringPtr )
+1:  .word branch_impl
+    CalcBranchBackToLabel tokenBufferLookup
+tokenBufferEmpty:
     .word drop_impl
-    .word drop_impl
+    .word drop_impl  
     .word return_impl
 
 
