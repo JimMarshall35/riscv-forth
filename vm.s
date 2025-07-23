@@ -453,7 +453,7 @@ word_header tokenBufferSize, tokenBufferSize, 0, return, dup
 tokenBufferSize_data:
     .word
     
-word_header return, return, 0, forth_minus, tokenBufferSize
+word_header return, "r", 0, forth_minus, tokenBufferSize
     PopReturnStack s0
     end_word
 
@@ -488,7 +488,6 @@ eval_start:
     .word forth_minus_impl     # ( stringSize stringPtr char 0ifequal )
 1:  .word branchIfZero_impl    # ( stringSize stringPtr char )
     CalcBranchForwardToLabel whitespace
-
     .word tokenBuffer_impl     # ( stringSize stringPtr char tokenBuffer )
     .word tokenBufferSize_impl # ( stringSize stringPtr char tokenBuffer &tokenBufferSize )
     .word loadCell_impl        # ( stringSize stringPtr char tokenBuffer tokenBufferSize )
@@ -516,8 +515,7 @@ whitespace:
     .word loadCell_impl         # ( stringSize stringPtr tokenBufferSize )
 1:  .word branchIfZero_impl     # ( stringSize stringPtr )
     CalcBranchForwardToLabel whitespace_end
-    # lookup token here
-    #.word dup2_impl            
+    # lookup token here      
 tokenBufferLookup:
     .word tokenBufferSize_impl  # ( stringSize stringPtr &tokenBufferSize )
     .word loadCell_impl         # ( stringSize stringPtr tokenBufferSize )
@@ -586,20 +584,32 @@ word_header dup2, "2dup", 0, findXT, drop
     PushDataStack t1
     end_word
     
+
+
+
 word_header findXT, findXT, 0, doPossibleNumToken, dup2
     PopDataStack t5   # t5 == string ptr
     PopDataStack t6   # t6 == string length
-    mv a0, t5
-    mv a1, t6
-    call print_forth_string
+    
     la t4, vm_p_dictionary_end
     lw t4, 0(t4)
 1:
     word_code t4, t2
+    
     mv a0, t2
     mv a1, t5
     mv a2, t6
+    
+    PushReg t4
+    PushReg t5
+    PushReg t6
+
     call strcmp_fs_cs
+
+    PopReg t6
+    PopReg t5
+    PopReg t4
+    
     bne a3, zero, 3f # its a match! 
     lw t1, OFFSET_PREV(t4)
     beq t1, zero, 2f

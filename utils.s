@@ -151,7 +151,6 @@ strcmp:
     RestoreReturnAddress
     ret
 
-
 # Compare a forth string to a C string
 strcmp_fs_cs:
     # Args:
@@ -160,28 +159,37 @@ strcmp_fs_cs:
     # a2 - F string length
     # Returns:
     # a3 - 1 if string 1 contents == string 2 contents else 0
-    SaveReturnAddress
-#     li a3, 0
-#     mv t0, a0      # t0 == cstring
-#     mv t1, a1      # t1 == fstring
-#     mv t2, a2      # t2 == fstring length
+    #SaveReturnAddress
+    #j c_fs_notequal
+    mv t6, ra
+    mv t4, a1
+    mv t5, a0
 
-#     call strlen 
-#     mv t3, a1      # t3 == cstring length
 
-#     bne t2, t3, 1f   
+    call strlen
 
-#     # lengths are equal
-# 2:
-#     lw a0, 0(t0)
-#     lw a1, 0(t1)
-#     bne a0, a1, 1f
-#     addi t0, t0, 1
-#     addi t1, t1, 1
-#     addi t2, t2, -1
-#     bne t2, zero, 2b
-#     li a3, 1
-# 1:
+
+    mv a0, t5
+    bne a1, a2, c_fs_notequal
+    mv a1, t4
+    li t0, 0
+1:
+    mv t1, a0
+    mv t2, a1
+    add t1, t1, t0
+    add t2, t2, t0
+    lb t1, 0(t1)
+    lb t2, 0(t2)
+    bne t1, t2, c_fs_notequal
+    addi t0, t0, 1
+    bne t0, a2, 1b
+c_fs_equal:
+    li a3, 1
+    mv ra, t6
+    #RestoreReturnAddress
+    ret
+c_fs_notequal:
     li a3, 0
-    RestoreReturnAddress
+    mv ra, t6
+    #RestoreReturnAddress
     ret
