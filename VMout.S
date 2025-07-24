@@ -787,6 +787,6 @@ word_header pop_return, "<R", 0, load_next_token, push_return
     PushDataStack t1
     end_word
 
-word_header_last load_next_token, lnt, 0, pop_return
+word_header load_next_token, lnt, 0, load_next_token, pop_return
     secondary_word load_next_token
-    .word return_impl
+    .word return_implword_header_last load_next_token, lnt, 0, load_next_token
