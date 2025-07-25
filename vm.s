@@ -305,7 +305,7 @@ word_header lineBufferSize, lineBufferSize, 0, loadCell, lineBuffer
     PushDataStack t1
     end_word
 lineBufferSize_data:
-    .word
+    .word 0
     
 word_header loadCell, @, 0, store, lineBufferSize
     PopDataStack t2
@@ -456,7 +456,7 @@ word_header tokenBufferSize, tokenBufferSize, 0, return, dup
     PushDataStack t1
     end_word
 tokenBufferSize_data:
-    .word
+    .word 0
     
 word_header return, "r", 0, forth_minus, tokenBufferSize
     PopReturnStack s0
@@ -759,7 +759,6 @@ word_header comment_on, "(", 0, comment_off, get_comment_bit
 word_header comment_off, ")", 0, here, comment_on
     secondary_word comment_off
     .word return_impl
-
 
 word_header here, here, 0, rot, comment_off
     la t2, here_data
