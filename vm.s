@@ -42,6 +42,10 @@ error_msg_stack_underflow: .ascii "data stack underflow\n\0"
 error_msg_return_stack_overflow:  .ascii "return stack overflow\n\0"
 error_msg_return_stack_underflow: .ascii "return stack underflow\n\0"
 
+.equ ERROR_MSG_TOKEN_LEN, 8
+.equ ERROR_MSG_NOTFOUND_LEN, 12
+error_msg_token: .ascii "token: '\0"
+error_msg_not_found: .ascii "' not found\n\0"
 
 vm_data_stack: .fill DATA_STACK_MAX_SIZE, CELL_SIZE, 0      # 32 cell stack size
 vm_return_stack: .fill RETURN_STACK_MAX_SIZE, CELL_SIZE, 0  # 64 cell return stack size
@@ -55,7 +59,7 @@ vm_str_error_message: .word 0
 
 .equ COMPILE_BIT, 1
 .equ COMMENT_BIT, 2
-
+.equ FIND_TOKEN_ERROR_BIT, 4
 vm_flags: .word 0
 
 .macro StackSizeElements regSize, regTemp, regOut
@@ -482,9 +486,16 @@ word_header eval, eval, 0, drop, swap
     # ( stringPtr stringSize )
     .word push_return_impl 
     .word push_return_impl 
+    .word unsetTokenLookupErrorFlag_impl
 eval_start:                    # (  )
     .word pop_return_impl      # ( stringPtr )
     .word pop_return_impl      # ( stringPtr stringSize )
+    .word getTokenLookupErrorFlag_impl # ( stringPtr stringSize nonzeroIfSet)
+1:  .word branchIfZero_impl    # ( stringPtr stringSize )
+    CalcBranchForwardToLabel error_flag_not_set
+1:  .word branch_impl
+    CalcBranchForwardToLabel tokenNotFoundError
+error_flag_not_set:
     .word dup_impl             # ( stringPtr stringSize stringSize ) 
 1:  .word branchIfZero_impl    # ( stringPtr stringSize ) 
     CalcBranchForwardToLabel end_eval
@@ -560,15 +571,21 @@ wordnotfound:
     .word push_return_impl      # ( stringPtr+1 )
     .word push_return_impl      # (  )
 
-    
-
+    .word doPossibleNumToken_impl       # (  )
+    .word getTokenLookupErrorFlag_impl  # ( nonZeroIfSet )
+1:  .word branchIfZero_impl
+    CalcBranchForwardToLabel ErrorFlagIsUnset
+ErrorFlagIsSet:
+    # don't reset token buffer so we can report the token that was not found
+1:  .word branch_impl
+    CalcBranchForwardToLabel ErrorFlagEnd
+ErrorFlagIsUnset:
     # reset tokenbuffersize
     .word literal_impl 
     .word 0                     # ( 0 )
     .word tokenBufferSize_impl  # ( 0 &tokenBufferSize )
     .word store_impl            # (  )
-
-    .word doPossibleNumToken_impl # (  )
+ErrorFlagEnd:
 
 1:  .word branch_impl           
     CalcBranchBackToLabel eval_start
@@ -635,6 +652,34 @@ tokenBufferEmpty:
     .word drop_impl
     .word drop_impl  
     .word return_impl
+tokenNotFoundError:
+    .word drop_impl
+    .word drop_impl  
+    
+    .word literal_impl 
+    .word error_msg_token       # ( errorStr )
+    .word literal_impl
+    .word ERROR_MSG_TOKEN_LEN   # ( errorStr errorStrLen)
+    .word print_impl            # ( )
+    
+    .word tokenBuffer_impl      # ( tokenBuf )
+    .word tokenBufferSize_impl  # ( tokenBuf &tokenBufferSize )
+    .word loadCell_impl         # ( tokenBuf tokenBufferSize )
+    .word print_impl
+    
+    .word literal_impl
+    .word error_msg_not_found    # ( errorStr )
+    .word literal_impl
+    .word ERROR_MSG_NOTFOUND_LEN # ( errorStr errorStrLen)
+    .word print_impl             # ( )
+
+    # reset tokenbuffersize
+    .word literal_impl 
+    .word 0                     # ( 0 )
+    .word tokenBufferSize_impl  # ( 0 &tokenBufferSize )
+    .word store_impl            # (  )
+
+    .word return_impl
 
 
 word_header drop, drop, 0, dup2, eval
@@ -687,8 +732,7 @@ word_header findXT, findXT, 0, doPossibleNumToken, dup2
         
 word_header doPossibleNumToken, doPossibleNumToken, 0, doWordFound, findXT
     secondary_word doPossibleNumToken
-
-
+    .word setTokenLookupErrorFlag_impl
     .word return_impl
     
 word_header doWordFound, doWordFound, 0, flags, doPossibleNumToken
@@ -710,12 +754,22 @@ word_header setCompile, ], 0, setInterpret, flags
     .word literal_impl
     .word COMPILE_BIT     # ( flags COMPILE_BIT )
     .word forth_or_impl   # ( flags|COMPILE_BIT )
-    .word flags_impl      # ( flags|COMPILE_BIT flags_impl )
+    .word flags_impl      # ( flags|COMPILE_BIT &flags )
     .word store_impl      # ( )
     .word return_impl
 
 word_header setInterpret, [, 0, forth_and, setCompile
     secondary_word setInterpret
+    .word flags_impl      # ( &flags )
+    .word loadCell_impl   # ( flags )
+    .word literal_impl
+    .word COMPILE_BIT     # ( flags COMPILE_BIT )
+    .word literal_impl    # ( flags COMPILE_BIT -1 )
+    .word -1
+    .word forth_xor_impl  # ( flags ~COMPILE_BIT )
+    .word forth_and_impl  # ( flags&~COMPILE_BIT )
+    .word flags_impl      # ( flags&~COMPILE_BIT &flags )
+    .word store_impl      # ( )
     .word return_impl
 
 word_header forth_and, "and", 0, forth_or, setInterpret
@@ -786,6 +840,68 @@ word_header pop_return, "<R", 0, load_next_token, push_return
     PushDataStack t1
     end_word
 
-word_header_last load_next_token, lnt, 0, pop_return
+word_header load_next_token, lnt, 0, setTokenLookupErrorFlag, pop_return
     secondary_word load_next_token
+    .word return_impl
+    
+word_header setTokenLookupErrorFlag, setTokenLookupErrorFlag, 0, getTokenLookupErrorFlag, load_next_token
+    secondary_word setTokenLookupErrorFlag
+    .word flags_impl           # ( &flags )
+    .word loadCell_impl        # ( flags )
+    .word literal_impl
+    .word FIND_TOKEN_ERROR_BIT # ( flags FIND_TOKEN_ERROR_BIT )
+    .word forth_or_impl        # ( flags|FIND_TOKEN_ERROR_BIT )
+    .word flags_impl           # ( flags|FIND_TOKEN_ERROR_BIT &flags )
+    .word store_impl           # ( )
+    .word return_impl
+
+word_header getTokenLookupErrorFlag, getTokenLookupErrorFlag, 0, unsetTokenLookupErrorFlag, setTokenLookupErrorFlag
+    secondary_word getTokenLookupErrorFlag
+    .word flags_impl           # ( &flags )
+    .word loadCell_impl        # ( flags )
+    .word literal_impl         # 
+    .word FIND_TOKEN_ERROR_BIT # ( flags COMPILE_BIT )
+    .word forth_and_impl       # ( flags&COMPILE_BIT )
+    .word return_impl
+
+word_header unsetTokenLookupErrorFlag, unsetTokenLookupErrorFlag, 0, print, getTokenLookupErrorFlag
+    secondary_word unsetTokenLookupErrorFlag
+    .word flags_impl           # ( &flags )
+    .word loadCell_impl        # ( flags )
+    .word literal_impl
+    .word FIND_TOKEN_ERROR_BIT # ( flags FIND_TOKEN_ERROR_BIT )
+    .word literal_impl         # ( flags FIND_TOKEN_ERROR_BIT -1 )
+    .word -1
+    .word forth_xor_impl       # ( flags ~FIND_TOKEN_ERROR_BIT )
+    .word forth_and_impl       # ( flags&~FIND_TOKEN_ERROR_BIT )
+    .word flags_impl           # ( flags&~FIND_TOKEN_ERROR_BIT &flags )
+    .word store_impl           # ( )
+    .word return_impl
+
+
+word_header_last print, print, 0, unsetTokenLookupErrorFlag
+    secondary_word print       # ( pString nStringSize -- )
+    .word push_return_impl     # ( pString )
+print_start:
+    .word pop_return_impl      # ( pString nStringSize )
+    .word dup_impl             # ( pString nStringSize nStringSize )
+1:  .word branchIfZero_impl    # ( pString nStringSize )
+    CalcBranchForwardToLabel printLoopEnd
+    .word push_return_impl    # ( pString )
+    .word dup_impl            # ( pString pString )
+    .word loadByte_impl       # ( pString char )
+    .word emit_impl           # ( pString )
+    .word literal_impl
+    .word 1                   # ( pString 1 )
+    .word forth_add_impl      # ( pString+1 )
+    .word pop_return_impl     # ( pString+1 nStringSize )
+    .word literal_impl
+    .word 1                   # ( pString+1 nStringSize 1 )
+    .word forth_minus_impl    # ( pString+1 nStringSize-1 )
+    .word push_return_impl    # ( pString+1 )
+1:  .word branch_impl
+    CalcBranchBackToLabel print_start
+printLoopEnd:
+    .word drop_impl
+    .word drop_impl
     .word return_impl
