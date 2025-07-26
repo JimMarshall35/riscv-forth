@@ -879,8 +879,9 @@ word_header unsetTokenLookupErrorFlag, unsetTokenLookupErrorFlag, 0, print, getT
     .word return_impl
 
 
-word_header_last print, print, 0, unsetTokenLookupErrorFlag
-    secondary_word print       # ( pString nStringSize -- )
+word_header print, print, 0, isValidNumber, unsetTokenLookupErrorFlag
+    secondary_word print
+    # ( pString nStringSize -- )
     .word push_return_impl     # ( pString )
 print_start:
     .word pop_return_impl      # ( pString nStringSize )
@@ -905,3 +906,8 @@ printLoopEnd:
     .word drop_impl
     .word drop_impl
     .word return_impl
+    
+word_header_last isValidNumber, isValidNumber, 0, print
+    secondary_word isValidNumber
+    .word return_impl
+

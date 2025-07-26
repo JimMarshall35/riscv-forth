@@ -22,7 +22,8 @@ def do_cmd_args():
     parser.add_argument("--new_word_name", help="the name of a new word to add to the source file. If this is not passed, the script will list and verify the assembly file's contents as a list of forth words.", type=str)
     parser.add_argument("--new_word_code", help="the code of a new word to add to the source file. Only works if name is passed too. If not passed with name, set to the same value as name as default", type=str)
     parser.add_argument('--immediate', action='store_true')
-    
+    parser.add_argument('--list_words', action='store_true')
+    parser.add_argument('--report_types', action='store_true')
     args = parser.parse_args()
     return args
 
@@ -56,7 +57,41 @@ word_header_str = "word_header"
 word_header_first_str = "word_header_first"
 word_header_last_str = "word_header_last"
 
+class WordType(Enum):
+    Undefined = 0
+    Primary = 1
+    Secondary = 2
+    Malformed = 3
+
 class WordHeader:
+    def deduce_type_from_body(self):
+        def secondary_word_macro_present(self):
+            matches = [x for x in self.body if "secondary_word" in x]
+            if len(matches) > 1:
+                self.errors.append(f"more than one possible secondary header line present ({len(matches)})")
+            for m in matches:
+                split_res = m.split()
+                if len(split_res) != 2 or split_res[1] != self.name:
+                    self.errors.append(f"malformed secondary word header line '{m}'")
+            return len(matches) == 1 and len(self.errors) == 0
+        
+        def validate_as_primary_word(self):
+            matches = [x for x in self.body if "end_word" in x]
+            if len(matches):
+                self.wordType = WordType.Primary
+            else:
+                self.wordType = WordType.Malformed
+                self.errors.append("no 'end_word' macro present")
+        
+        if secondary_word_macro_present(self):
+            self.wordType = WordType.Secondary
+        else:
+            validate_as_primary_word(self)
+        
+
+    def add_line_to_body(self, line):
+        self.body.append(line)
+
     def get_line_string(self):
         if self.type == HeaderType.Start:
             return build_new_start_macro_line(self.name, self.code, self.b_immediate, self.next)
@@ -146,7 +181,11 @@ class WordHeader:
             return
         
         self.populate_fields(args)
-        
+    
+    def report_errors(self):
+        assert len(self.errors) > 0
+        print(f"Word name: '{self.name}' errors: \n{'\n'.join(self.errors) + '\n'}")
+
     def __init__(self, line_str, line_num):
         self.line_str = line_str
         self.b_is_valid = False
@@ -166,6 +205,8 @@ class WordHeader:
         self.prev = ""
         self.line_num = line_num
         self.b_dirty = False
+        self.body = []
+        self.wordType = WordType.Undefined
         self.validate()
     
     def valid(self):
@@ -175,6 +216,7 @@ def parse_lines(file):
     allLines = []
     headers = [] 
     lineCtr = 0
+    currentHeader = None
     for line in file.readlines():
         h = WordHeader(line,lineCtr)
         allLines.append(line)
@@ -184,6 +226,9 @@ def parse_lines(file):
                 print(e)
         if h.valid():
             headers.append(h)
+            currentHeader = h
+        elif currentHeader != None:
+            currentHeader.add_line_to_body(line)
         lineCtr += 1
     return headers, allLines
 
@@ -216,7 +261,7 @@ def traverse_headers(headers, iteratorFn):
     count = 0
     while True and onH:
         iteratorFn(onH)
-        print(onH.next)
+        #print(onH.next)
         if onH.next == "":
             return True
         onH = byName[onH.next]
@@ -236,7 +281,6 @@ def traverse_backwards(headers, iteratorFn):
     count = 0
     while True and onH:
         iteratorFn(onH)
-        print(onH.prev)
         if onH.prev == "":
             return True
         onH = byName[onH.prev]
@@ -258,6 +302,8 @@ def validate_links(headers):
     if count != numHeaders:
         print("Some link between the headers must be broken, ")
         return False
+    
+    count = 0
     if not traverse_backwards(headers, traverse_fn):
         print("Loop detected in list of headers BACKWARDS")
         return False
@@ -281,7 +327,6 @@ def validate_macro_types(headers):
 
 def main():
     args = do_cmd_args()
-    print(args)
     try:
         word_headers = []
         as_file = open(args.assembly_file, "r")
@@ -290,7 +335,13 @@ def main():
 
     word_headers, allLines = parse_lines(as_file)
     as_file.close()
-    print(word_headers)
+
+    for header in word_headers:
+        header.deduce_type_from_body()
+        if len(header.errors) > 0:
+            header.report_errors()
+
+    
     if validate_macro_types(word_headers):
         print("valid macro types")
     else:
@@ -302,12 +353,20 @@ def main():
         print("headers don't form a valid linked list")
 
     print()
-    print()
-    print()
-    print("List of word headers:")
-    for header in word_headers:
-        print(f"Name: {header.name}, Code: {header.code}, IsImmediate: {header.b_immediate}")
+
+    if args.list_words:
+        print("List of word headers:")
+        for header in word_headers:
+            print(f"Name: {header.name}, Code: {header.code}, IsImmediate: {header.b_immediate}")
     
+    if args.report_types:
+        num_prim = sum(1 for x in word_headers if x.wordType == WordType.Primary)
+        num_sec  = sum(1 for x in word_headers if x.wordType == WordType.Secondary)
+        num_mal  = sum(1 for x in word_headers if x.wordType == WordType.Malformed)
+        num_und  = sum(1 for x in word_headers if x.wordType == WordType.Undefined)
+        print(f"Word Types:\nPrimative: {num_prim}\nSecondary: {num_sec}\nMalformed: {num_mal}\nUndefined: {num_und}\nTotal: {len(word_headers)}")
+        pass
+
     if args.new_word_name:
         oldTail = word_headers[len(word_headers)-1]
         oldTail.type = HeaderType.Middle
