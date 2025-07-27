@@ -47,8 +47,16 @@ error_msg_return_stack_underflow: .ascii "return stack underflow\n\0"
 error_msg_token: .ascii "token: '\0"
 error_msg_not_found: .ascii "' not found\n\0"
 
+show_data_stack_begin_str:   .ascii "data   [ \0"
+show_return_stack_begin_str: .ascii "return [ \0"
+show_comma_sep_str:          .ascii ", \0"
+show_stack_end_str:          .ascii " ]\n\0"
+
+
 vm_data_stack: .fill DATA_STACK_MAX_SIZE, CELL_SIZE, 0      # 32 cell stack size
 vm_return_stack: .fill RETURN_STACK_MAX_SIZE, CELL_SIZE, 0  # 64 cell return stack size
+
+vm_scratch_pad: .fill 64, 1, 0
 
 # dictionary
 vm_p_dictionary_start: .word 0
@@ -175,6 +183,7 @@ div \regOut, \regSize, \regTemp
 .equ OFFSET_NEXT, (HEADER_CODE_BUF_SIZE)
 .equ OFFSET_PREV, (OFFSET_NEXT + CELL_SIZE)
 .equ OFFSET_IMM, (OFFSET_PREV + CELL_SIZE)
+.equ HEADER_SIZE, OFFSET_IMM + CELL_SIZE
 
 .macro word_next regPtrHeader, regPtrOut
     addi \regPtrOut, \regPtrHeader, OFFSET_NEXT
@@ -400,6 +409,7 @@ word_header outerInterpreter, outerInterpreter, 0, literal, forth_add
     CalcBranchBackToLabel outer_start
 backspace_entered:
     # emit
+    .word drop_impl                     # IMPORTANT: TODO: I can't account for why this drop is needed, without it it leaks a 0x7D (127) onto the stack
     .word literal_impl 
     .word 8                             # ( 8 )     
     .word dup_impl                      # ( 8 8 )
@@ -727,6 +737,7 @@ word_header findXT, findXT, 0, doPossibleNumToken, dup2
     PushDataStack zero
     end_word
 3:
+    addi t4, t4, HEADER_SIZE
     PushDataStack t4
     end_word
         
@@ -753,7 +764,7 @@ num_valid_string:
     
 word_header doWordFound, doWordFound, 0, flags, doPossibleNumToken
     secondary_word doWordFound
-    .word drop_impl
+    .word execute_impl
     .word return_impl
 
 word_header flags, flags, 0, setCompile, doWordFound
@@ -1006,10 +1017,73 @@ not_valid_end:
     .word 0                     # ( 0 )
     .word return_impl
 
-word_header_last forth_fatoi, "$", 0, isStringValidNumber
+word_header forth_fatoi, "$", 0, show, isStringValidNumber
     # ( buffer size -- num )
     PopDataStack a1
     PopDataStack a0
     call fatoi
     PushDataStack a2
     end_word
+
+
+
+word_header show, show, 0, execute, forth_fatoi
+    # DATA STACK
+    la a0, show_data_stack_begin_str
+    li a1, UART_BASE
+    call puts
+
+    mv t1, s1               # t1 = data stack ptr
+    mv t2, s2               # t2 = data stack size
+    beq t2, zero, data_stack_empty
+    add t3, t1, t2          # t3 = pointer end point
+    li t0, CELL_SIZE
+    sub t4, t3, t0 # penultimate pointer value
+1:
+    lw t0, 0(t1)
+
+    PushReg t1
+    PushReg t3
+    PushReg t4
+
+    mv a0, t0
+    la a1, vm_scratch_pad
+    li a2, 64
+    call itofa
+    
+    la a0, vm_scratch_pad
+    li a1, UART_BASE
+    call puts
+    PopReg t4
+    PopReg t3
+    PopReg t1
+
+    PushReg t3
+    PushReg t1
+    beq t1, t4, 2f  # skip comma if on last stack entry
+    la a0, show_comma_sep_str
+    li a1, UART_BASE
+    call puts
+2:
+    PopReg t1
+    PopReg t3
+    
+    
+    addi t1, t1, CELL_SIZE
+    bne t1, t3, 1b
+
+    la a0, show_stack_end_str
+    li a1, UART_BASE
+    call puts
+    end_word
+data_stack_empty:
+    la a0, show_stack_end_str
+    li a1, UART_BASE
+    call puts
+    end_word
+
+
+word_header_last execute, execute, 0, show
+    PopDataStack t2
+    jalr ra, t2, 0
+    end_word         # should never be hit

@@ -6,6 +6,7 @@
 .global strcmp
 .global print_forth_string
 .global fatoi
+.global itofa
 
 .section .text
 .include "defines.s"
@@ -250,5 +251,91 @@ fatoi_error_end:
     mv a0, t3
     li a1, UART_BASE
     call puts
+    RestoreReturnAddress
+    ret
+
+abs:
+    # Args:
+    # a0 - integer
+    # Returns:
+    # a0 - integer
+    SaveReturnAddress
+    li t0, 0
+    blt a0, t0, 1f
+    RestoreReturnAddress
+    ret
+1:
+    li t0, -1
+    mul a0, a0, t0
+    RestoreReturnAddress
+    ret
+
+num_chars_required:
+    # Args:
+    # a0 - integer
+    # Return:
+    # a1 - outNumChars
+    # Note:
+    # Expects that a0 > 0
+    SaveReturnAddress
+
+    li a1, 1
+1:
+    li t0, 10
+    blt a0, t0, num_between_0_and_9
+    addi a1, a1, 1
+    div a0, a0, t0
+    j 1b
+num_between_0_and_9:
+
+    RestoreReturnAddress
+    ret
+
+itofa:
+    # Args:
+    # a0 - integer
+    # a1 - outBuf
+    # a2 - outBufMaxSize
+    SaveReturnAddress
+    
+    li t0, 0
+    blt a0, t0, itofa_neg
+itofa_pos:
+    li t6, 0   # t6 == do we add the '-' sign at start of string
+    j 1f
+itofa_neg:
+    li t6, 1
+    call abs
+1:
+    # by here a0 is > 0
+    mv t1, a0
+    mv t2, a1
+    call num_chars_required
+    mv t3, a1        # t3 = number of chars required
+    add t3, t3, t6   # possibly add 1 for the - sign
+    mv a0, t1        # restore a0
+    mv a1, t2        # restore a1
+    add t1, t3, a1   # t1 - ptr for zero terminator
+    sb zero, 0(t1)   # store zero at end
+    addi t3, t3, -1  # -1 to get index of last char  
+1:
+    li t0, 10
+    rem t1, a0, t0   # t1 = a0 % 10  
+    addi t1, t1, '0' # t1 = char
+    add t0, a1, t3   # t0 = ptr to write char to
+    sb t1, 0(t0)     # store byte at char
+    li t0, 10        # 
+    blt a0, t0, 2f   # terminate loop if a0 < 10
+    div a0, a0, t0   # a0 /= 10
+    addi t3, t3, -1  # t3-- . move write index 1 to the left
+    j 1b             # 
+2:
+    bgt t6, zero, add_neg_sign
+    j add_neg_sign_end
+add_neg_sign:
+    li t0, '-'
+    sb t0, 0(a1)
+add_neg_sign_end:
+
     RestoreReturnAddress
     ret
