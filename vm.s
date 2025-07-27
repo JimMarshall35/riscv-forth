@@ -523,12 +523,12 @@ error_flag_not_set:
     .word literal_impl         
     .word 1                    # ( stringSize stringPtr 1 )
     .word forth_add_impl       # ( stringSize stringPtr+1 )
-    .word swap_impl             # ( stringPtr+1 stringSize )
+    .word swap_impl            # ( stringPtr+1 stringSize )
     .word literal_impl          
-    .word 1                     # ( stringPtr+1 stringSize 1 )
-    .word forth_minus_impl      # ( stringPtr+1 stringSize-1 )
-    .word push_return_impl      # ( stringPtr+1 )
-    .word push_return_impl      # ( )
+    .word 1                    # ( stringPtr+1 stringSize 1 )
+    .word forth_minus_impl     # ( stringPtr+1 stringSize-1 )
+    .word push_return_impl     # ( stringPtr+1 )
+    .word push_return_impl     # ( )
 1:  .word branch_impl
     CalcBranchBackToLabel eval_start
 whitespace:
@@ -552,7 +552,7 @@ wordfound:
 1:  .word branch_impl
     CalcBranchForwardToLabel wordfound_end
 wordnotfound:
-    .word drop_impl               # ( stringSize stringPtr )
+    .word drop_impl             # ( stringSize stringPtr )
     
     
 
@@ -732,8 +732,24 @@ word_header findXT, findXT, 0, doPossibleNumToken, dup2
         
 word_header doPossibleNumToken, doPossibleNumToken, 0, doWordFound, findXT
     secondary_word doPossibleNumToken
+    .word tokenBuffer_impl                      # ( pTokenBuffer )
+    .word tokenBufferSize_impl                  # ( pTokenBuffer &tokenBufferSize )
+    .word loadCell_impl                         # ( pTokenBuffer tokenBufferSize )
+    .word dup2_impl                             # ( pTokenBuffer tokenBufferSize pTokenBuffer tokenBufferSize )
+    .word isStringValidNumber_impl              # ( pTokenBuffer tokenBufferSize bIsValid )
+1:  .word branchIfZero_impl                     # ( pTokenBuffer tokenBufferSize )
+    CalcBranchForwardToLabel num_invalid_string #
+                                                # convert string to number  
+    .word forth_fatoi_impl                      # ( num )
+1:  .word branch_impl                           #
+    CalcBranchForwardToLabel num_valid_string   # 
+num_invalid_string:                             #
+    .word drop_impl                             # ( pTokenBuffer )
+    .word drop_impl                             # (  )
     .word setTokenLookupErrorFlag_impl
     .word return_impl
+num_valid_string:
+    .word return_impl                 
     
 word_header doWordFound, doWordFound, 0, flags, doPossibleNumToken
     secondary_word doWordFound
@@ -879,14 +895,14 @@ word_header unsetTokenLookupErrorFlag, unsetTokenLookupErrorFlag, 0, print, getT
     .word return_impl
 
 
-word_header print, print, 0, isValidNumber, unsetTokenLookupErrorFlag
+word_header print, print, 0, isCharValidNumber, unsetTokenLookupErrorFlag
     secondary_word print
     # ( pString nStringSize -- )
-    .word push_return_impl     # ( pString )
+    .word push_return_impl    # ( pString )
 print_start:
-    .word pop_return_impl      # ( pString nStringSize )
-    .word dup_impl             # ( pString nStringSize nStringSize )
-1:  .word branchIfZero_impl    # ( pString nStringSize )
+    .word pop_return_impl     # ( pString nStringSize )
+    .word dup_impl            # ( pString nStringSize nStringSize )
+1:  .word branchIfZero_impl   # ( pString nStringSize )
     CalcBranchForwardToLabel printLoopEnd
     .word push_return_impl    # ( pString )
     .word dup_impl            # ( pString pString )
@@ -907,7 +923,93 @@ printLoopEnd:
     .word drop_impl
     .word return_impl
     
-word_header_last isValidNumber, isValidNumber, 0, print
-    secondary_word isValidNumber
+word_header isCharValidNumber, isCharValidNumber, 0, isStringValidNumber, print
+    # ( char -- 0IfNotValid )
+    secondary_word isCharValidNumber
+    .word literal_impl                             # ( char numChar )
+    .word '-'                                      #
+    .word dup2_impl                                # ( char numChar char numChar )
+    .word forth_minus_impl                         # ( char numChar char-numChar )
+1:  .word branchIfZero_impl                        # ( char numChar )
+    CalcBranchForwardToLabel return_char_valid     #
+    .word drop_impl                                # ( char )
+    .word literal_impl                             # 
+    .word '0'                                      # ( char numChar )
+char_valid_start:
+    # compare i and stack top
+    .word dup2_impl                                # ( char numChar char numChar )
+    .word forth_minus_impl                         # ( char numChar char-numChar )
+1:  .word branchIfZero_impl                        # ( char numChar )
+    CalcBranchForwardToLabel return_char_valid     #
+    .word literal_impl                             #
+    .word 1                                        # ( char numChar 1 )
+    .word forth_add_impl                           # ( char numChar+1 )
+    .word dup_impl                                 # ( char numChar numChar )
+    .word literal_impl                             #
+    .word ':'                                      # ( char numChar numChar endChar )
+    .word forth_minus_impl                         # ( char numChar numChar-endChar )
+1:  .word branchIfZero_impl                        # ( char numChar )
+    CalcBranchForwardToLabel return_char_not_valid #
+1:  .word branch_impl                              # ( char numChar )
+    CalcBranchBackToLabel char_valid_start         #
+return_char_valid:                                 # ( char numChar )
+    .word drop_impl                                # ( char )
+    .word drop_impl                                # (  )
+    .word literal_impl                             # 
+    .word 1                                        # ( 1 )
+    .word return_impl                              #
+return_char_not_valid:                             #
+    .word drop_impl                                # ( char )
+    .word drop_impl                                # (  )
+    .word literal_impl                             # 
+    .word 0                                        # ( 0 )
+    .word return_impl       
+
+word_header isStringValidNumber, isStringValidNumber, 0, forth_fatoi, isCharValidNumber
+    secondary_word isStringValidNumber
+    # ( pString nStringSize -- 0ifNotValid)
+    .word push_return_impl    # ( pString )
+string_valid_start:
+    .word pop_return_impl     # ( pString nStringSize )
+    .word dup_impl            # ( pString nStringSize nStringSize )
+1:  .word branchIfZero_impl   # ( pString nStringSize )
+    CalcBranchForwardToLabel string_valid_end
+    .word push_return_impl    # ( pString )
+
+    # do stuff
+    .word dup_impl               # ( pString pString )
+    .word loadByte_impl          # ( pString char )
+    .word isCharValidNumber_impl # ( pString bValid )
+1:  .word branchIfZero_impl      # ( pString )
+    CalcBranchForwardToLabel not_valid_end 
+    .word literal_impl           #
+    .word 1                      # ( pString 1 )
+    .word forth_add_impl         # ( pString+1 )
+    .word pop_return_impl        # ( pString nStringSize )
+    .word literal_impl           #
+    .word 1                      # ( pString nStringSize 1 )
+    .word forth_minus_impl       # ( pString nStringSize-1 )
+    .word push_return_impl       # ( pString )
+1:  .word branch_impl            
+    CalcBranchBackToLabel string_valid_start
+string_valid_end:
+    .word drop_impl             # ( pString )
+    .word drop_impl             # ( )
+    .word literal_impl          #
+    .word 1                     # ( 1 )
+    .word return_impl
+not_valid_end:
+    .word pop_return_impl       # ( _ )
+    .word drop_impl             # ( )
+    .word drop_impl             # ( )
+    .word literal_impl          #
+    .word 0                     # ( 0 )
     .word return_impl
 
+word_header_last forth_fatoi, "$", 0, isStringValidNumber
+    # ( buffer size -- num )
+    PopDataStack a1
+    PopDataStack a0
+    call fatoi
+    PushDataStack a2
+    end_word

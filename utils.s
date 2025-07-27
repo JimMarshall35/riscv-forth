@@ -5,6 +5,7 @@
 .global strlen
 .global strcmp
 .global print_forth_string
+.global fatoi
 
 .section .text
 .include "defines.s"
@@ -192,4 +193,62 @@ c_fs_notequal:
     li a3, 0
     mv ra, t6
     #RestoreReturnAddress
+    ret
+
+fatoi_error_msg: .ascii "fatoi error\n\0"
+fatoi_error_msg_malformed: .ascii "fatoi error malformed string. '-' must be at end\n\0"
+fatoi_error_msg_invalid: .ascii "fatoi error invalid chars\n\0"
+
+fatoi:
+    # Args:
+    # a0 - forth string
+    # a1 - string length
+    # Returns:
+    # a2 - converted num
+    SaveReturnAddress
+    li a2, 0
+    blt a1, zero, fatoi_end
+    beq a1, zero, fatoi_end
+    # length > 0
+    li t0, 1  # t0 = order of magnitude
+    addi a1, a1, -1
+1:
+    add t1, a1, a0 # t1 points to end of string
+    lb t1, 0(t1)   # deref byte at end of string
+    
+    li t2, '-'
+    beq t1, t2, fatoi_minus
+
+    la t3, fatoi_error_msg_invalid
+    li t2, '0'
+    blt t1, t2, fatoi_error_end
+    li t2, '9'
+    bgt t1, t2, fatoi_error_end
+    
+    li t2, '0'       
+    sub t1, t1, t2 # convert from ascii to a number from 0-9
+    mul t1, t1, t0 # multiply by order of magnitude
+    add a2, a2, t1 # add to total
+    li t2, 10
+    mul t0, t0, t2 # increase order of magnitude
+    j fatoi_minus_end
+fatoi_minus:
+    li t2, -1
+    mul a2, a2, t2
+    la t3, fatoi_error_msg_malformed
+    bne a1, zero, fatoi_error_end
+fatoi_minus_end:
+    beq a1, zero, 2f
+    addi a1, a1, -1
+    j 1b
+2:
+fatoi_end:
+    RestoreReturnAddress
+    ret
+fatoi_error_end:
+    # report error
+    mv a0, t3
+    li a1, UART_BASE
+    call puts
+    RestoreReturnAddress
     ret

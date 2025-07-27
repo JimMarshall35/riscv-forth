@@ -9,21 +9,21 @@ from enum import Enum
 # - Lists forth words present in source file
 # FUTURE WORK:
 # - flag to add in end_word macro (or make this the default and have the flag to disable)
-# - More static analysis: determine type of word, is it primative, 
-#   secondary, or a variable. If secondary are thread pointers pointing to valid word implementations (and NOT the header itself)
-
+# - If word is secondary are thread pointers pointing to valid word implementations (and NOT the header itself)
+# - Is a word is primitive is it a variable
+# - Are branch macros used correctly ('1:' in correct place)
 
 def do_cmd_args():
     parser = argparse.ArgumentParser(
                     prog='PrecompiledWordTool',
-                    description='Creates new word entries in an assembler file that are compile time linked to the previous and next word',
+                    description='Creates new word entries in an assembler file and does forth specific linting',
                     epilog='Jim Marshall - Riscv assembly forth 2025')
     parser.add_argument("assembly_file", help="the assembly file to use")
     parser.add_argument("--new_word_name", help="the name of a new word to add to the source file. If this is not passed, the script will list and verify the assembly file's contents as a list of forth words.", type=str)
     parser.add_argument("--new_word_code", help="the code of a new word to add to the source file. Only works if name is passed too. If not passed with name, set to the same value as name as default", type=str)
-    parser.add_argument('--immediate', action='store_true')
-    parser.add_argument('--list_words', action='store_true')
-    parser.add_argument('--report_types', action='store_true')
+    parser.add_argument('--immediate', action='store_true', help="make the new word immediate")
+    parser.add_argument('--list_words', action='store_true', help="print a list of word")
+    parser.add_argument('--report_types', action='store_true', help="print a report of the frequency of different types of words")
     args = parser.parse_args()
     return args
 
@@ -261,7 +261,6 @@ def traverse_headers(headers, iteratorFn):
     count = 0
     while True and onH:
         iteratorFn(onH)
-        #print(onH.next)
         if onH.next == "":
             return True
         onH = byName[onH.next]
@@ -368,6 +367,7 @@ def main():
         pass
 
     if args.new_word_name:
+        print(f"Adding new word, '{args.new_word_name}'")
         oldTail = word_headers[len(word_headers)-1]
         oldTail.type = HeaderType.Middle
         word_headers.append(
