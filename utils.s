@@ -339,3 +339,16 @@ add_neg_sign_end:
 
     RestoreReturnAddress
     ret
+
+forth_string_to_c:
+    # Args:
+    # a0 - outCStringBuf
+    # a1 - inString
+    # a2 - inStringLen
+    SaveReturnAddress
+    lb t0, 0(a1)
+    sb t0, 0(a0)
+    addi a0, a0, 1
+    addi a1, a1, 1
+    RestoreReturnAddress
+    ret

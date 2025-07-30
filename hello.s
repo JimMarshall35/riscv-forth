@@ -25,5 +25,5 @@ main:
  
 
 .section .data
-helloworld: .string "Forth - Jim Marshall 2025\n"
+helloworld: .string "Risc V Forth\n"
 
