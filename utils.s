@@ -7,6 +7,11 @@
 .global print_forth_string
 .global fatoi
 .global itofa
+.global forth_string_to_c
+
+.section .data
+
+itofa_hex_LUT: .ascii "0123456789abcdef"
 
 .section .text
 .include "defines.s"
@@ -297,6 +302,92 @@ itofa:
     # a1 - outBuf
     # a2 - outBufMaxSize
     SaveReturnAddress
+    la t0, vm_flags
+    lw t0, 0(t0)
+    andi t0, t0, 8 # NUM_IO_HEX_BIT
+    beq t0, zero, decimal_io
+hex_io:
+    call itofa_hex
+    j num_io_end
+decimal_io:
+    call itofa_dec
+num_io_end:
+    RestoreReturnAddress
+    ret
+
+itofa_hex:
+    # Args:
+    # a0 - integer
+    # a1 - outBuf
+    # a2 - outBufMaxSize
+    SaveReturnAddress
+    li t0, '0'
+    sb t0, 0(a1)
+    li t0, 'x'
+    sb t0, 1(a1)
+
+    la t2, itofa_hex_LUT
+
+    srli t1, a0, 28
+    andi t0, t1, 0xf
+    add t0, t0, t2
+    lb t0, 0(t0)
+    sb t0, 2(a1)
+
+    srli t1, a0, 24
+    andi t0, t1, 0xf
+    add t0, t0, t2
+    lb t0, 0(t0)
+    sb t0, 3(a1)
+
+    srli t1, a0, 20
+    andi t0, t1, 0xf
+    add t0, t0, t2
+    lb t0, 0(t0)
+    sb t0, 4(a1)
+
+    srli t1, a0, 16
+    andi t0, t1, 0xf
+    add t0, t0, t2
+    lb t0, 0(t0)
+    sb t0, 5(a1)
+
+    srli t1, a0, 12
+    andi t0, t1, 0xf
+    add t0, t0, t2
+    lb t0, 0(t0)
+    sb t0, 6(a1)
+
+    srli t1, a0, 8
+    andi t0, t1, 0xf
+    add t0, t0, t2
+    lb t0, 0(t0)
+    sb t0, 7(a1)
+
+    srli t1, a0, 4
+    andi t0, t1, 0xf
+    add t0, t0, t2
+    lb t0, 0(t0)
+    sb t0, 8(a1)
+
+    mv t1, a0
+    andi t0, t1, 0xf
+    add t0, t0, t2
+    lb t0, 0(t0)
+    sb t0, 9(a1)
+
+    sb zero, 10(a1)
+
+    RestoreReturnAddress
+    ret
+
+
+itofa_dec:
+    # Args:
+    # a0 - integer
+    # a1 - outBuf
+    # a2 - outBufMaxSize
+    SaveReturnAddress
     
     li t0, 0
     blt a0, t0, itofa_neg
@@ -345,10 +436,22 @@ forth_string_to_c:
     # a0 - outCStringBuf
     # a1 - inString
     # a2 - inStringLen
-    SaveReturnAddress
+    #SaveReturnAddress
+    mv t2, a0
+    mv t3, a1
+    mv t4, a2
+    
+    li t1, 0
+1:
+    beq t1, a2, 2f
     lb t0, 0(a1)
     sb t0, 0(a0)
     addi a0, a0, 1
     addi a1, a1, 1
-    RestoreReturnAddress
+    addi t1, t1, 1
+    j 1b
+2:
+    add t0, t2, t4
+    sb zero, 0(t0)
+    #RestoreReturnAddress
     ret
