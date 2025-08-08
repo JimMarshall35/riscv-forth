@@ -1,8 +1,83 @@
 .include "defines.s"
+.include "VmMacros.S"
+
+.global emit_impl
+.global key_impl
+.global tokenBuffer_impl
+.global loadCell_impl
+.global store_impl
+.global loadByte_impl
+.global storeByte_impl
+.global branchIfZero_impl
+.global branch_impl
+.global forth_add_impl
+.global literal_impl
+.global dup_impl
+.global tokenBufferSize_impl
+.global return_impl
+.global forth_minus_impl
+.global swap_impl
+.global eval_impl
+.global drop_impl
+.global dup2_impl
+.global findXT_impl
+.global doPossibleNumToken_impl
+.global doWordFound_impl
+.global flags_impl
+.global setCompile_impl
+.global setInterpret_impl
+.global forth_and_impl
+.global forth_or_impl
+.global get_compile_bit_impl
+.global forth_xor_impl
+.global get_comment_bit_impl
+.global comment_on_impl
+.global comment_off_impl
+.global here_impl
+.global rot_impl
+.global push_return_impl
+.global pop_return_impl
+.global load_next_token_impl
+.global setTokenLookupErrorFlag_impl
+.global getTokenLookupErrorFlag_impl
+.global unsetTokenLookupErrorFlag_impl
+.global print_impl
+.global isCharValidNumber_impl
+.global isStringValidNumber_impl
+.global forth_fatoi_impl
+.global show_impl
+.global execute_impl
+.global showR_impl
+.global setHere_impl
+.global return_stack_index_impl
+.global create_header_impl
+.global getHeaderNext_impl
+.global getHeaderPrev_impl
+.global setHeaderPrev_impl
+.global setHeaderNext_impl
+.global getDictionaryEnd_impl
+.global setDictionaryEnd_impl
+.global tokenBufferToHeaderCode_impl
+.global toCString_impl
+.global beginSecondaryWord_impl
+.global compileWord_impl
+.global endWord_impl
+.global getHeaderImmediate_impl
+.global setHeaderImmediate_impl
+.global getXTHeader_impl
+.global isXTImmediate_impl
+.global setNumInputHex_impl
+.global setNumInputDec_impl
+.global equals_impl
+.global notEquals_impl
+.global lessThan_impl
+.global greaterThan_impl
+
+.global last_vm_word
 
 #define VM_STACK_BOUNDS_CHECK
-
-
+.global title_string
+.global vm_flags
     # IMPORTANT! REGISTERS USED BY THE INTERPRETER:
 
     # Until I can get C Style defines to work you'll just have to read this, assembler.
@@ -13,26 +88,24 @@
     # s2 - data stack size
     # s3 - return stack base pointer
     # s4 - return stack size
+    # s5 - memory top
 
 
-.global vm_init
-
-.equ CELL_SIZE, 4
-.equ DATA_STACK_MAX_SIZE, 32
-.equ RETURN_STACK_MAX_SIZE, 64
-
-.equ HEADER_NAME_BUF_SIZE, 32
-.equ HEADER_CODE_BUF_SIZE, 32
-
-.equ DATA_STACK_MAX_SIZE_BYTES, (DATA_STACK_MAX_SIZE * CELL_SIZE)
-
-.equ PC_REG, s0
-
-.equ TOKEN_BUFFER_MAX_SIZE, 32
-.equ LINE_BUFFER_MAX_SIZE, 128
+.global vm_run
 
 
-.data
+vm_flags: .word 0
+
+vm_data_stack: .fill DATA_STACK_MAX_SIZE, CELL_SIZE, 0      # 32 cell stack size
+vm_return_stack: .fill RETURN_STACK_MAX_SIZE, CELL_SIZE, 0  # 64 cell return stack size
+
+vm_scratch_pad: .fill 64, 1, 0
+
+# dictionary
+vm_p_dictionary_start: .word 0
+vm_p_dictionary_end: .word 0
+vm_str_error_message: .word 0
+
 
 starting_interpreter_string: .ascii "starting outer interpreter...\n\0"
 waiting_for_key_str: .ascii "waiting for key string...\n\0"
@@ -52,154 +125,9 @@ show_return_stack_begin_str: .ascii "return [ \0"
 show_comma_sep_str:          .ascii ", \0"
 show_stack_end_str:          .ascii " ]\n\0"
 
-
-vm_data_stack: .fill DATA_STACK_MAX_SIZE, CELL_SIZE, 0      # 32 cell stack size
-vm_return_stack: .fill RETURN_STACK_MAX_SIZE, CELL_SIZE, 0  # 64 cell return stack size
-
-vm_scratch_pad: .fill 64, 1, 0
-
-# dictionary
-vm_p_dictionary_start: .word 0
-vm_p_dictionary_end: .word 0
-vm_str_error_message: .word 0
-
-# flags
-
-.equ COMPILE_BIT, 1
-.equ COMMENT_BIT, 2
-.equ FIND_TOKEN_ERROR_BIT, 4
-vm_flags: .word 0
-
-.macro StackSizeElements regSize, regTemp, regOut
-li \regTemp, CELL_SIZE
-div \regOut, \regSize, \regTemp 
-.endm
+title_string: .string "Risc V Forth\n"
 
 
-.macro PushStack regBase, regSize, regVal
-
-    add t0, \regBase, \regSize
-    sw \regVal, 0(t0)
-    addi \regSize, \regSize, CELL_SIZE
-.endm
-
-.macro PopStack regBase, regSize, regOutVal
-    addi \regSize, \regSize, -CELL_SIZE
-    add t0, \regBase, \regSize
-    lw \regOutVal, 0(t0)
-.endm
-#     s0 - instruction pointer
-#     s1 - data stack base pointer
-#     s2 - data stack size
-#     s3 - return stack base pointer
-#     s4 - return stack size
-
-.macro PushDataStack regVal
-    PushStack s1, s2, \regVal
-.endm
-
-.macro PopDataStack regOutVal
-    PopStack s1, s2, \regOutVal
-.endm
-
-.macro PushReturnStack regVal
-    PushStack s3, s4, \regVal
-.endm
-
-.macro PopReturnStack regOutVal
-    PopStack s3, s4, \regOutVal
-.endm
-
-.macro padded_string string, max
-1:
-    .ascii "\string"
-2:
-    .iflt \max - (2b - 1b)
-    .error "String too long"
-    .endif
-
-    .ifgt \max - (2b - 1b)
-    .zero \max - (2b - 1b)
-    .endif
-
-.endm
-
-# Imaginary C Struct - word header
-#
-# struct Header
-# {
-#     char code[HEADER_CODE_BUF_SIZE];       // the code you write when you write forth 
-#     struct Header* next;
-#     struct Header* prev;
-#     Cell bImmediate;
-# }
-
-.macro word_header_unitialised name, code, immediate
-\name:
-    padded_string \code, HEADER_CODE_BUF_SIZE
-    .word 0
-    .word 0
-    .word \immediate
-\name\()_impl:
-.endm
-
-.macro word_header_last name, code, immediate, prev
-\name:
-    padded_string \code, HEADER_CODE_BUF_SIZE
-    .word 0
-    .word \prev
-    .word \immediate
-\name\()_impl:
-.endm
-
-
-.macro word_header_first name, code, immediate, next
-\name:
-    padded_string \code, HEADER_CODE_BUF_SIZE
-    .word \next
-    .word 0
-    .word \immediate
-\name\()_impl:
-.endm
-
-.macro word_header name, code, immediate, next, prev
-\name:
-    padded_string \code, HEADER_CODE_BUF_SIZE
-    .word \next
-    .word \prev
-    .word \immediate
-\name\()_impl:
-.endm
-
-.macro secondary_word name
-    PushReturnStack s0
-    la s0, \name\()_ThreadBegin
-    lw t0, 0(s0)
-    jalr ra, t0, 0
-\name\()_ThreadBegin:
-.endm
-
-.equ OFFSET_CODE, 0
-.equ OFFSET_NEXT, (HEADER_CODE_BUF_SIZE)
-.equ OFFSET_PREV, (OFFSET_NEXT + CELL_SIZE)
-.equ OFFSET_IMM, (OFFSET_PREV + CELL_SIZE)
-.equ HEADER_SIZE, OFFSET_IMM + CELL_SIZE
-
-.macro word_next regPtrHeader, regPtrOut
-    addi \regPtrOut, \regPtrHeader, OFFSET_NEXT
-.endm
-
-.macro word_prev regPtrHeader, regPtrOut
-    addi \regPtrOut, \regPtrHeader, OFFSET_PREV
-.endm
-
-.macro word_imm regPtrHeader, regPtrOut
-    addi \regPtrOut, \regPtrHeader, OFFSET_IMM
-.endm
-
-.macro word_code regPtrHeader, regPtrOut
-    addi \regPtrOut, \regPtrHeader, OFFSET_CODE
-.endm
 
 .text
 
@@ -227,7 +155,7 @@ find_dict_end:
     RestoreReturnAddress
     ret
 
-vm_init:
+vm_run:
     SaveReturnAddress
 
     # init dictionary
@@ -245,47 +173,23 @@ vm_init:
     la s1, vm_data_stack
     li s2, 0
     la s3, vm_return_stack
-    la s4, 0
-
-    la t0, lineBufferSize_data
-    sw zero, 0(t0)
+    li s4, 0
 
     la t0, tokenBufferSize_data
     sw zero, 0(t0)
-
-    la a0, lineBuffer_data
-    li a1, 0
-    li a2, LINE_BUFFER_MAX_SIZE
-    call memset
 
     la a0, tokenBuffer_data
     li a1, 0
     li a2, TOKEN_BUFFER_MAX_SIZE
     call memset
 
+    la s5, _dataEnd
+
     la s0, outerInterpreter_impl
     call outerInterpreter_impl
 
     RestoreReturnAddress
     ret
-
-.macro end_word
-    addi s0, s0, CELL_SIZE
-    lw t0, 0(s0)
-    jalr ra, t0, 0
-.endm
-
-# Following 2 macros used to calculate branch labels within pre-compiled secondary words
-.macro CalcBranchBackToLabel label
-    # ASSUMES THAT 1b IS A LABEL TO THE BRANCH OR BRANCHZERO IMPLEMENTATION POINTER
-    .word - (( 1b - \label ) + 1 * CELL_SIZE)
-.endm
-
-.macro CalcBranchForwardToLabel label
-    # ASSUMES THAT 1b IS A LABEL TO THE BRANCH OR BRANCHZERO IMPLEMENTATION POINTER
-    .word (( \label - 1b) - 1 * CELL_SIZE)
-.endm
-
 
 word_header_first emit,   emit,     0, key
     PopDataStack a0
@@ -299,28 +203,14 @@ word_header       key,    key,      0, tokenBuffer, emit
     PushDataStack a0
     end_word
 
-word_header tokenBuffer, tokenbuffer, 0, lineBuffer, key
+word_header tokenBuffer, tokenbuffer, 0, loadCell, key
     la t1, tokenBuffer_data
     PushDataStack t1
     end_word
 tokenBuffer_data:
     .fill TOKEN_BUFFER_MAX_SIZE, 1, 0
                                            
-word_header lineBuffer, lineBuffer, 0, lineBufferSize, tokenBuffer
-    la t1, lineBuffer_data
-    PushDataStack t1
-    end_word
-lineBuffer_data:
-    .fill LINE_BUFFER_MAX_SIZE, 1, 0
-
-word_header lineBufferSize, lineBufferSize, 0, loadCell, lineBuffer
-    la t1, lineBufferSize_data
-    PushDataStack t1
-    end_word
-lineBufferSize_data:
-    .word 0
-    
-word_header loadCell, @, 0, store, lineBufferSize
+word_header loadCell, @, 0, store, tokenBuffer
     PopDataStack t2
     lw t3, 0(t2)
     PushDataStack t3
@@ -365,95 +255,14 @@ word_header branch, b, 0, forth_add, branchIfZero
     add s0, s0, t1         # add literal to PC
     end_word
 
-word_header forth_add, +, 0, outerInterpreter, branch
+word_header forth_add, +, 0, literal, branch
     PopDataStack t2
     PopDataStack t3
     add t2, t2, t3
     PushDataStack t2
     end_word
-
-word_header outerInterpreter, outerInterpreter, 0, literal, forth_add
-    secondary_word outerInterpreter
- outer_start:
-    .word key_impl                      # ( char )
-    .word dup_impl                      # ( char char )
-    .word lineBufferSize_impl           # ( char char &lineBufferSize )
-    .word loadCell_impl                 # ( char char lineBufferSize )
-    .word lineBuffer_impl               # ( char char lineBufferSize lineBuffer )
-    .word forth_add_impl                # ( char char lineBufferSize+lineBuffer )
-    .word storeByte_impl                # ( char )
-    .word dup_impl                      # ( char char )
-    .word emit_impl                     # ( char )
-    .word dup_impl                      # ( char char )
-    .word literal_impl 
-    .word 0x7f                          # ( char char 0x7f )
-    .word forth_minus_impl              # ( char areEqual )
-1:  .word branchIfZero_impl                  
-    CalcBranchForwardToLabel backspace_entered
-    .word literal_impl 
-    .word 0xD                           # ( char 0xd )
-    .word forth_minus_impl              # ( areEqual )
-1:  .word branchIfZero_impl                  
-    CalcBranchForwardToLabel enter_entered
-
-    # increment lineBufferSize - a non-enter non-backspace character has been entered
-    .word literal_impl
-    .word 1
-    .word lineBufferSize_impl
-    .word loadCell_impl
-    .word forth_add_impl
-    .word lineBufferSize_impl
-    .word store_impl
-
-1:  .word branch_impl 
-    CalcBranchBackToLabel outer_start
-backspace_entered:
-    # emit
-    .word drop_impl                     # IMPORTANT: TODO: I can't account for why this drop is needed, without it it leaks a 0x7D (127) onto the stack
-    .word literal_impl 
-    .word 8                             # ( 8 )     
-    .word dup_impl                      # ( 8 8 )
-    .word emit_impl                     # ( 8 )
-    .word emit_impl                     # ( )
-    .word literal_impl
-    .word 32                            # ( 32 )
-    .word dup_impl                      # ( 8 8 )
-    .word emit_impl                     # ( 8 )
-    .word emit_impl                     # ( )
-    .word literal_impl 
-    .word 8                             # ( 8 )
-    .word dup_impl                      # ( 8 8 )
-    .word emit_impl                     # ( 8 )
-    .word emit_impl                     # ( )
-
-    # decrement lineBufferSize
-    .word lineBufferSize_impl           # ( &lineBufferSize )
-    .word dup_impl                      # ( &lineBufferSize &lineBufferSize )
-    .word loadCell_impl                 # ( &lineBufferSize lineBufferSize )
-    .word literal_impl
-    .word 1                             # ( &lineBufferSize lineBufferSize 1 )
-    .word forth_minus_impl              # ( &lineBufferSize newLineBufferSize )
-    .word swap_impl                     # ( newLineBufferSize &lineBufferSize )
-    .word store_impl                    # ( )
-1:  .word branch_impl 
-    CalcBranchBackToLabel outer_start
-enter_entered:
-    .word literal_impl 
-    .word 10                            # ( 10 )
-    .word emit_impl                     # ( )
-
-    .word lineBuffer_impl               # ( lineBuffer )
-    .word lineBufferSize_impl           # ( lineBuffer &lineBufferSize )
-    .word loadCell_impl                 # ( lineBuffer lineBufferSize )
-    .word eval_impl                     # ( )
-    .word literal_impl
-    .word 0                             # ( 0 )
-    .word lineBufferSize_impl           # ( 0 &lineBufferSize )
-    .word store_impl                    # ( )
-1:  .word branch_impl 
-    CalcBranchBackToLabel outer_start
-
-word_header literal, literal, 0, dup, outerInterpreter
+    
+word_header literal, literal, 0, dup, forth_add
     addi s0, s0, CELL_SIZE
     lw t3, 0(s0)
     PushDataStack t3
@@ -558,13 +367,10 @@ tokenBufferLookup:
     CalcBranchForwardToLabel wordnotfound
 wordfound:
     # word found
-    
 1:  .word branch_impl
     CalcBranchForwardToLabel wordfound_end
 wordnotfound:
     .word drop_impl             # ( stringSize stringPtr )
-    
-    
 
     # increment string ptr
     .word literal_impl         
@@ -763,8 +569,26 @@ num_valid_string:
     .word return_impl                 
     
 word_header doWordFound, doWordFound, 0, flags, doPossibleNumToken
+    # ( xt -- )
     secondary_word doWordFound
-    .word execute_impl
+    .word get_compile_bit_impl    # ( xt 0IfNotSet )
+1:  .word branchIfZero_impl       # ( xt )
+    CalcBranchForwardToLabel word_found_interpret_mode
+    # compile mode
+    .word dup_impl                # ( xt xt )
+    .word isXTImmediate_impl      # ( xt 0IfNotImmediate )
+1:  .word branchIfZero_impl       # ( xt )
+    CalcBranchForwardToLabel doWordFound_notImm
+    # we are immediate - execute token
+1:  .word branch_impl
+    CalcBranchForwardToLabel word_found_interpret_mode
+doWordFound_notImm:
+    .word compileWord_impl         # ( )
+1:  .word branch_impl
+    CalcBranchForwardToLabel doWordFound_end
+word_found_interpret_mode:
+    .word execute_impl            # ( )
+doWordFound_end:
     .word return_impl
 
 word_header flags, flags, 0, setCompile, doWordFound
@@ -842,11 +666,9 @@ word_header comment_off, ")", 0, here, comment_on
     .word return_impl
 
 word_header here, here, 0, rot, comment_off
-    la t2, here_data
-    PushDataStack t2
+    PushDataStack s5
     end_word
-here_data:
-    .word _dataEnd
+
 
 word_header rot, rot, 0, push_return, here
     PopDataStack t1
@@ -869,6 +691,73 @@ word_header pop_return, "<R", 0, load_next_token, push_return
 
 word_header load_next_token, lnt, 0, setTokenLookupErrorFlag, pop_return
     secondary_word load_next_token
+
+    .word literal_impl            #
+    .word 0                       # ( 0 )
+    .word tokenBufferSize_impl    # ( 0 &tokenBufferSize )
+    .word store_impl              # ( )
+    .word literal_impl            # 
+    .word -5                      # ( -5 )
+    .word return_stack_index_impl # ( &R[-5] )  numCharsLeft = R[-5]
+    .word loadCell_impl           # ( numCharsLeft )
+    .word literal_impl            # 
+    .word -4                      # ( numCharsLeft -1 )
+    .word return_stack_index_impl # ( numCharsLeft &R[-5] ) stringPtr = R[-5]
+    .word loadCell_impl           # ( numCharsLeft stringPtr )
+lnt_start:
+    .word dup_impl                # ( numCharsLeft stringPtr stringPtr )
+    .word loadByte_impl           # ( numCharsLeft stringPtr char )
+    .word dup_impl                # ( numCharsLeft stringPtr char char )
+    .word literal_impl            #
+    .word 32                      # ( numCharsLeft stringPtr char char 32 )
+    .word forth_minus_impl        # ( numCharsLeft stringPtr char 0ifwhitespace )
+1:  .word branchIfZero_impl       # ( numCharsLeft stringPtr char )
+    CalcBranchForwardToLabel lnt_whitespace
+    # not whitespace
+
+    .word tokenBuffer_impl        # ( numCharsLeft stringPtr char tokenBuffer )
+    .word tokenBufferSize_impl    # ( numCharsLeft stringPtr char tokenBuffer &tokenBufferSize )
+    .word loadCell_impl           # ( numCharsLeft stringPtr char tokenBuffer tokenBufferSize )
+    .word forth_add_impl          # ( numCharsLeft stringPtr char tokenBuffer+tokenBufferSize )
+    .word storeByte_impl          # ( numCharsLeft stringPtr )
+    .word tokenBufferSize_impl    # ( numCharsLeft stringPtr &tokenBufferSize )
+    .word loadCell_impl           # ( numCharsLeft stringPtr tokenBufferSize )
+    .word literal_impl            #
+    .word 1                       # ( numCharsLeft stringPtr tokenBufferSize 1 )
+    .word forth_add_impl          # ( numCharsLeft stringPtr tokenBufferSize+1 )
+    .word tokenBufferSize_impl    # ( numCharsLeft stringPtr tokenBufferSize+1 &tokenBufferSize )
+    .word store_impl              # ( numCharsLeft stringPtr )
+1:  .word branch_impl             #
+    CalcBranchForwardToLabel tb_zero
+lnt_whitespace:                   # ( numCharsLeft stringPtr char )
+    .word drop_impl               # ( numCharsLeft stringPtr )
+lnt_whitespace_skipdrop:
+    .word tokenBufferSize_impl    # ( numCharsLeft stringPtr &tokenBufferSize )
+    .word loadCell_impl           # ( numCharsLeft stringPtr tokenBufferSize )
+1:  .word branchIfZero_impl       # ( numCharsLeft stringPtr )
+    CalcBranchForwardToLabel tb_zero
+1:  .word branch_impl             # ( numCharsLeft stringPtr )
+    CalcBranchForwardToLabel lnt_end
+tb_zero:
+    .word literal_impl            # 
+    .word 1                       # ( numCharsLeft stringPtr 1 )
+    .word forth_add_impl          # ( numCharsLeft stringPtr+1 )
+    .word swap_impl               # ( stringPtr+1 numCharsLeft )
+    .word literal_impl            #
+    .word 1                       # ( stringPtr+1 numCharsLeft 1 )
+    .word forth_minus_impl        # ( stringPtr+1 numCharsLeft-1 )
+    .word swap_impl               # ( numCharsLeft stringPtr )
+1:  .word branch_impl             # 
+    CalcBranchBackToLabel lnt_start
+lnt_end:                          # ( numCharsLeft stringptr )
+    .word literal_impl            # 
+    .word -4                      # ( numCharsLeft stringptr -1 )
+    .word return_stack_index_impl # ( numCharsLeft stringptr &R[-1] ) stringPtr = R[-2]
+    .word store_impl              # ( numCharsLeft )
+    .word literal_impl            # 
+    .word -5                      # ( numCharsLeft -2 )
+    .word return_stack_index_impl # ( numCharsLeft &R[-2] )  numCharsLeft = R[-2]
+    .word store_impl              # ( )
     .word return_impl
     
 word_header setTokenLookupErrorFlag, setTokenLookupErrorFlag, 0, getTokenLookupErrorFlag, load_next_token
@@ -1082,8 +971,342 @@ data_stack_empty:
     call puts
     end_word
 
-
-word_header_last execute, execute, 0, show
+word_header execute, execute, 0, showR, show
     PopDataStack t2
     jalr ra, t2, 0
     end_word         # should never be hit
+
+
+word_header showR, showR, 0, setHere, execute
+    # RETURN STACK
+    la a0, show_return_stack_begin_str
+    li a1, UART_BASE
+    call puts
+
+    mv t1, s3               # t1 = data stack ptr
+    mv t2, s4               # t2 = data stack size
+    beq t2, zero, return_stack_empty
+    add t3, t1, t2          # t3 = pointer end point
+    li t0, CELL_SIZE
+    sub t4, t3, t0 # penultimate pointer value
+1:
+    lw t0, 0(t1)
+
+    PushReg t1
+    PushReg t3
+    PushReg t4
+
+    mv a0, t0
+    la a1, vm_scratch_pad
+    li a2, 64
+    call itofa
+    
+    la a0, vm_scratch_pad
+    li a1, UART_BASE
+    call puts
+    PopReg t4
+    PopReg t3
+    PopReg t1
+
+    PushReg t3
+    PushReg t1
+    beq t1, t4, 2f  # skip comma if on last stack entry
+    la a0, show_comma_sep_str
+    li a1, UART_BASE
+    call puts
+2:
+    PopReg t1
+    PopReg t3
+    
+    
+    addi t1, t1, CELL_SIZE
+    bne t1, t3, 1b
+
+    la a0, show_stack_end_str
+    li a1, UART_BASE
+    call puts
+    end_word
+return_stack_empty:
+    la a0, show_stack_end_str
+    li a1, UART_BASE
+    call puts
+    end_word
+
+word_header setHere, setHere, 0, return_stack_index, showR
+    PopDataStack s5
+    end_word
+
+word_header return_stack_index, R[], 0, create_header, setHere
+    PopDataStack t3
+    bgt t3, zero, invalid_rstack_index
+    mv t0, s3 # s3 - return stack base pointer
+    mv t1, s4 # s4 - return stack size
+    addi t1, t1, -CELL_SIZE
+    add t0, t0, t1 # t0 points to end of stack
+    
+    lw t4, 0(t0)
+
+    li t2, CELL_SIZE
+    mul t3, t3, t2
+    add t3, t0, t3
+    blt t3, s3, invalid_rstack_index
+    PushDataStack t3
+    end_word
+invalid_rstack_index:
+    li t3, 0
+    PushDataStack t3
+    end_word
+
+word_header create_header, create_header, 0, getHeaderNext, return_stack_index
+    # ( -- pHeader)
+    secondary_word create_header
+    .word load_next_token_impl            # ( )
+    .word here_impl                       # ( here )
+    .word dup_impl                        # ( here here )
+    .word literal_impl                    #
+    .word HEADER_SIZE                     # ( here here HEADER_SIZE )
+    .word forth_add_impl                  # ( here here+HEADER_SIZE )
+    .word setHere_impl                    # ( here )
+    .word dup_impl                        # ( here here )
+    .word getDictionaryEnd_impl           # ( here here pDictEnd )
+    .word setHeaderPrev_impl              # ( here )
+    .word dup_impl                        # ( here here )
+    .word getDictionaryEnd_impl           # ( here here pDictEnd )
+    .word swap_impl                       # ( here pDictEnd here )
+    .word setHeaderNext_impl              # ( here )
+    .word dup_impl                        # ( here here )
+    .word literal_impl                    # ( here here 0 )
+    .word 0                               #    
+    .word swap_impl                       # ( here 0 here )
+    .word setHeaderPrev_impl              # ( here )
+    .word dup_impl                        # ( here here )
+    .word show_impl                       
+    .word tokenBufferToHeaderCode_impl    # ( here )
+    .word return_impl 
+
+word_header getHeaderNext, getHeaderNext, 0, getHeaderPrev, create_header
+    secondary_word getHeaderNext
+    # ( pHeader -- pHeader->pNext )
+    .word literal_impl
+    .word OFFSET_NEXT      # ( pHeader OFFSET_NEXT )
+    .word forth_add_impl   # ( pHeader+OFFSET_NEXT )
+    .word loadCell_impl    # ( pHeader->pNext )
+    .word return_impl
+
+word_header getHeaderPrev, getHeaderPrev, 0, setHeaderPrev, getHeaderNext
+    secondary_word getHeaderPrev
+    # ( pHeader -- pHeader->pPrev )
+    .word literal_impl
+    .word OFFSET_PREV      # ( pHeader OFFSET_PREV )
+    .word forth_add_impl   # ( pHeader+OFFSET_PREV )
+    .word loadCell_impl    # ( pHeader->pPrev )
+    .word return_impl
+
+
+word_header setHeaderPrev, setHeaderPrev, 0, setHeaderNext, getHeaderPrev
+    secondary_word setHeaderPrev
+    # ( pPrev pHeader -- )
+    .word literal_impl
+    .word OFFSET_PREV      # ( pPrev pHeader OFFSET_PREV )
+    .word forth_add_impl   # ( pPrev pHeader+OFFSET_PREV )
+    .word store_impl       # ( )
+    .word return_impl
+
+word_header setHeaderNext, setHeaderNext, 0, getDictionaryEnd, setHeaderPrev
+    secondary_word setHeaderNext
+    # ( pNext pHeader -- )
+    .word literal_impl
+    .word OFFSET_NEXT      # ( pNext pHeader OFFSET_PREV )
+    .word forth_add_impl   # ( pNext pHeader+OFFSET_PREV )
+    .word store_impl       # ( )
+    .word return_impl
+
+word_header getDictionaryEnd, getDictionaryEnd, 0, setDictionaryEnd, setHeaderNext
+    secondary_word getDictionaryEnd
+    # ( -- pDictEnd )
+    .word literal_impl         # 
+    .word vm_p_dictionary_end  # ( &pDictEnd )
+    .word loadCell_impl        # ( pDictEnd )
+    .word return_impl
+
+word_header setDictionaryEnd, setDictionaryEnd, 0, tokenBufferToHeaderCode, getDictionaryEnd
+    secondary_word setDictionaryEnd
+    # ( pDictEndNew -- )
+    .word literal_impl         # 
+    .word vm_p_dictionary_end  # ( pDictEndNew &pDictEnd )
+    .word store_impl           # ( )
+    .word return_impl
+
+word_header tokenBufferToHeaderCode, tokenBufferToHeaderCode, 0, toCString, setDictionaryEnd
+    secondary_word tokenBufferToHeaderCode
+                                   # ( outBuf )
+    .word tokenBufferSize_impl     # ( outBuf &tokenBufferSize )
+    .word loadCell_impl            # ( outBuf tokenBufferSize )
+    .word swap_impl                # ( tokenBufferSize outBuf )
+    .word tokenBuffer_impl         # ( tokenBufferSize outBuf tokenBuffer )
+    .word swap_impl                # ( tokenBufferSize tokenBuffer outBuf )
+    .word toCString_impl           # ( )
+    .word return_impl
+
+
+word_header toCString, toCString, 0, beginSecondaryWord, tokenBufferToHeaderCode
+    # ( inStringLen inString outCString -- )
+    PopDataStack a0
+    PopDataStack a1
+    PopDataStack a2
+    call forth_string_to_c
+    end_word
+
+word_header beginSecondaryWord, bw, 0, compileWord, toCString
+    # ( -- pNewWordHeader )
+    secondary_word beginSecondaryWord
+    .word create_header_impl      # ( pHeader )
+    .word setCompile_impl      
+    .word literal_impl
+    .word 0x014982b3
+    .word compileWord_impl
+    .word literal_impl
+    .word 0x0082a023
+    .word compileWord_impl
+    .word literal_impl
+    .word 0x004a0a13
+    .word compileWord_impl
+    .word literal_impl
+    .word 0x00000417
+    .word compileWord_impl
+    .word literal_impl
+    .word 0x00040413
+    .word compileWord_impl
+    .word literal_impl
+    .word 0x00042283
+    .word compileWord_impl
+    .word literal_impl
+    .word 0x000280e7b
+    .word compileWord_impl
+    .word return_impl
+
+word_header compileWord, cw, 0, endWord, beginSecondaryWord
+    # ( word -- )
+    secondary_word compileWord
+    .word here_impl      # ( word here )
+    .word store_impl     # ( )
+    .word here_impl      # ( here )
+    .word literal_impl   #
+    .word CELL_SIZE      # ( here CELL_SIZE )
+    .word forth_add_impl # ( here+CELL_SIZE )
+    .word setHere_impl   # ()
+    .word return_impl
+
+
+word_header endWord, end, 1, getHeaderImmediate, compileWord
+    # ( pNewWordHeader -- ) IMMEDIATE
+    secondary_word endWord
+    .word setDictionaryEnd_impl   # ( )
+    .word literal_impl            # 
+    .word return_impl             # ( return_impl )
+    .word compileWord_impl        # ( )
+    .word setInterpret_impl       #
+    .word return_impl
+
+
+word_header getHeaderImmediate, getHeaderImmediate, 0, setHeaderImmediate, endWord
+    # ( pHeader -- pHeader->bImmediate )
+    secondary_word getHeaderImmediate
+    .word literal_impl
+    .word OFFSET_IMM       # ( pHeader OFFSET_IMM )
+    .word forth_add_impl   # ( pHeader+OFFSET_IMM )
+    .word loadCell_impl    # ( pHeader->bImmediate )
+    .word return_impl
+    
+
+word_header setHeaderImmediate, setHeaderImmediate, 0, getXTHeader, getHeaderImmediate
+    # ( pNext pHeader -- )
+    secondary_word setHeaderImmediate
+    .word literal_impl
+    .word OFFSET_IMM      # ( pNext pHeader OFFSET_IMM )
+    .word forth_add_impl   # ( pNext pHeader+OFFSET_IMM )
+    .word store_impl       # ( )
+    .word return_impl
+
+
+word_header getXTHeader, getXTHeader, 0, isXTImmediate, setHeaderImmediate
+    # ( xt -- pHeader )
+    secondary_word getXTHeader
+    .word literal_impl     #
+    .word HEADER_SIZE      # ( xt HEADER_SIZE )
+    .word forth_minus_impl # ( xt-HEADER_SIZE )
+    .word return_impl
+
+word_header isXTImmediate, isXTImmediate, 0, setNumInputHex, getXTHeader
+    # ( xt -- 0IfNotImmediate )
+    secondary_word isXTImmediate
+    .word getXTHeader_impl          # ( pHeader )
+    .word getHeaderImmediate_impl   # ( pHeader->bImmediate )
+    .word return_impl
+
+word_header setNumInputHex, ioHex, 0, setNumInputDec, isXTImmediate
+    la t1, vm_flags
+    lw t0, 0(t1)
+    ori t0, t0, NUM_IO_HEX_BIT
+    sw t0, 0(t1)
+    end_word
+
+
+word_header setNumInputDec, ioDec, 0, equals, setNumInputHex
+    la t1, vm_flags
+    lw t0, 0(t1)
+    li t2, NUM_IO_HEX_BIT
+    xori t2, t2, -1
+    and t0, t0, t2 # t0 &= ~NUM_IO_HEX_BIT
+    sw t0, 0(t1)
+    end_word
+
+word_header equals, (=), 0, notEquals, setNumInputDec
+    PopDataStack t1
+    PopDataStack t2
+    beq t1, t2, equals_equals
+    PushDataStack zero
+    j equals_end
+equals_equals:
+    li t1, 1
+    PushDataStack t1
+equals_end:
+    end_word
+    
+word_header notEquals, nq, 0, lessThan, equals
+    PopDataStack t0
+    PopDataStack t1
+    bne t0, t1, nq_equals
+    PushDataStack zero
+    j nq_end
+nq_equals:
+    li t1, 1
+    PushDataStack t1 
+nq_end:
+    end_word
+    
+word_header lessThan, <, 0, greaterThan, notEquals
+    PopDataStack t0
+    PopDataStack t1
+    blt t0, t1, lt
+    PushDataStack zero
+    j lt_end
+lt:
+    li t1, 1
+    PushDataStack t1
+lt_end:
+    end_word
+
+last_vm_word: # IMPORTANT: KEEP THIS LABEL POINTING TO THE LAST VM WORD.
+word_header greaterThan, >, 0, first_system_word, lessThan
+    PopDataStack t1
+    PopDataStack t2
+    bgt t2, t1, gt
+    PushDataStack zero
+    j gt_end
+gt:
+    li t1, 1
+    PushDataStack t1
+gt_end:
+    end_word
+
