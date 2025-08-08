@@ -1262,9 +1262,9 @@ word_header setNumInputDec, ioDec, 0, equals, setNumInputHex
     end_word
 
 word_header equals, (=), 0, notEquals, setNumInputDec
-    PopDataStack t0
     PopDataStack t1
-    beq t0, t1, equals_equals
+    PopDataStack t2
+    beq t1, t2, equals_equals
     PushDataStack zero
     j equals_end
 equals_equals:
@@ -1299,9 +1299,9 @@ lt_end:
 
 last_vm_word: # IMPORTANT: KEEP THIS LABEL POINTING TO THE LAST VM WORD.
 word_header greaterThan, >, 0, first_system_word, lessThan
-    PopDataStack t0
     PopDataStack t1
-    bgt t0, t1, gt
+    PopDataStack t2
+    bgt t2, t1, gt
     PushDataStack zero
     j gt_end
 gt:

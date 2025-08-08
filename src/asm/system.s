@@ -37,25 +37,16 @@ word_header doBackspace, doBackspace, 0, outerInterpreter, LineBufferSize
     .word literal_impl
     .word 0
     .word greaterThan_impl
-    .word branchIfZero_impl
+1:  .word branchIfZero_impl
     CalcBranchForwardToLabel doBackspace_then_0_
     .word literal_impl
     .word 8
-    .word literal_impl
-    .word 8
-    .word emit_impl
     .word emit_impl
     .word literal_impl
     .word 32
-    .word literal_impl
-    .word 32
-    .word emit_impl
     .word emit_impl
     .word literal_impl
     .word 8
-    .word literal_impl
-    .word 8
-    .word emit_impl
     .word emit_impl
     .word LineBufferSize_impl
     .word loadCell_impl
@@ -68,34 +59,44 @@ doBackspace_then_0_:
     .word return_impl
 
 
-word_header outerInterpreter, outerInterpreter, 0, , doBackspace
+word_header outerInterpreter, outerInterpreter, 0, 0, doBackspace
     secondary_word outerInterpreter
+    .word literal_impl
+    .word 0
+    .word LineBufferSize_impl
+    .word store_impl
 outerInterpreter_begin_0_:
     .word key_impl
     .word dup_impl
     .word literal_impl
-    .word 14
+    .word 13
     .word equals_impl
-    .word branchIfZero_impl
+1:  .word branchIfZero_impl
     CalcBranchForwardToLabel outerInterpreter_else_1_
     .word drop_impl
+    .word literal_impl
+    .word 10
+    .word emit_impl
+    .word LineBuffer_impl
+    .word LineBufferSize_impl
+    .word loadCell_impl
     .word eval_impl
     .word literal_impl
     .word 0
     .word LineBufferSize_impl
     .word store_impl
-    .word branch_impl
+1:  .word branch_impl
     CalcBranchForwardToLabel outerInterpreter_then_5_
 outerInterpreter_else_1_:
     .word dup_impl
     .word literal_impl
     .word 127
     .word equals_impl
-    .word branchIfZero_impl
+1:  .word branchIfZero_impl
     CalcBranchForwardToLabel outerInterpreter_else_2_
     .word drop_impl
     .word doBackspace_impl
-    .word branch_impl
+1:  .word branch_impl
     CalcBranchForwardToLabel outerInterpreter_then_4_
 outerInterpreter_else_2_:
     .word LineBufferSize_impl
@@ -103,8 +104,10 @@ outerInterpreter_else_2_:
     .word literal_impl
     .word 127
     .word lessThan_impl
-    .word branchIfZero_impl
+1:  .word branchIfZero_impl
     CalcBranchForwardToLabel outerInterpreter_then_3_
+    .word dup_impl
+    .word emit_impl
     .word LineBuffer_impl
     .word LineBufferSize_impl
     .word loadCell_impl
@@ -121,8 +124,8 @@ outerInterpreter_then_3_:
 outerInterpreter_then_4_:
 outerInterpreter_then_5_:
     .word literal_impl
-    .word 1
-    .word branchIfZero_impl
+    .word 0
+1:  .word branchIfZero_impl
     CalcBranchBackToLabel outerInterpreter_begin_0_
     .word return_impl
 

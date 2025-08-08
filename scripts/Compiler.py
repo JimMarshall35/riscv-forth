@@ -79,7 +79,7 @@ class CompiledWord:
             lines.append(f"    {end_primitive_macro_name}")
         else:
             # add header macros
-            lines.append(f"word_header {self.code}, {self.code}, {"1" if self.immediate else "0"}, {self.nextWord}, {self.prevWord}")
+            lines.append(f"word_header {self.code}, {self.code}, {"1" if self.immediate else "0"}, {self.nextWord if self.nextWord else "0"}, {self.prevWord}")
             lines.append(f"    secondary_word {self.code}")
             # add word body
             lines += [x.txt for x in self.body]
@@ -200,7 +200,7 @@ def do_unfound_word(prg, token):
     prg.append_line_to_current(lineTxt)
 
 def do_if(prg, tokenItr, currentToken):
-    prg.append_line_to_current(f"    .word {branch0_word_name}")
+    prg.append_line_to_current(f"1:  .word {branch0_word_name}")
     branch_offset_line = prg.append_line_to_current(f"    CalcBranchForwardToLabel {unset_label_phrase}")
     prg.push_control_flow(branch_offset_line, ControlFlowType.If)
 
@@ -224,7 +224,7 @@ def do_else(prg, tokenItr, currentToken):
     if ctrl_flow.type != ControlFlowType.If:
         prg.errors(f"Line {currentToken.srcLine}: {control_flow_type_names[ctrl_flow.type]} on control flow stack, 'if' expected")
         return
-    prg.append_line_to_current(f"    .word {branch_word_name}")
+    prg.append_line_to_current(f"1:  .word {branch_word_name}")
     branch_offset_line = prg.append_line_to_current(f"    CalcBranchForwardToLabel {unset_label_phrase}")
     prg.push_control_flow(branch_offset_line, ControlFlowType.Else)
     label = prg.get_control_flow_label_for_current(ControlFlowType.Else)
@@ -244,13 +244,13 @@ def do_until(prg, tokenItr, currentToken):
     if ctrl_flow.type != ControlFlowType.Begin:
         prg.errors(f"Line {currentToken.srcLine}: {control_flow_type_names[ctrl_flow.type]} on control flow stack, 'begin' expected")
         return
-    prg.append_line_to_current(f"    .word {branch0_word_name}")
+    prg.append_line_to_current(f"1:  .word {branch0_word_name}")
     branch_offset_line = prg.append_line_to_current(f"    CalcBranchBackToLabel {unset_label_phrase}")
     branch_offset_line.back_patch(ctrl_flow.compiledLine.get_string())
 
 def do_do(prg, tokenItr, currentToken):
     # branch to test
-    prg.append_line_to_current(f"    .word {branch_word_name}")
+    prg.append_line_to_current(f"1:  .word {branch_word_name}")
     branch_offset_line = prg.append_line_to_current(f"    CalcBranchForwardToLabel {unset_label_phrase}")
     prg.push_control_flow(branch_offset_line, ControlFlowType.Do)
     # push a label - the start of the loop
@@ -286,7 +286,7 @@ def do_loop(prg, tokenItr, currentToken):
     # compile code to compare i and limit and branch if not equal
     prg.append_line_to_current(f"    .word {twodup_word_name}")
     prg.append_line_to_current(f"    .word {equals_word_name}")
-    prg.append_line_to_current(f"    .word {branch0_word_name}")
+    prg.append_line_to_current(f"1:  .word {branch0_word_name}")
     branch_offset_line = prg.append_line_to_current(f"    CalcBranchBackToLabel {unset_label_phrase}")
     branch_offset_line.back_patch(loopStartLabel.compiledLine)
     # compile code to cleanup stack now loop has ended
