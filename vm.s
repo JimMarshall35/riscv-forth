@@ -73,6 +73,8 @@
 .global lessThan_impl
 .global greaterThan_impl
 
+.global last_vm_word
+
 #define VM_STACK_BOUNDS_CHECK
 .global title_string
 .global vm_flags
@@ -1259,7 +1261,7 @@ word_header setNumInputDec, ioDec, 0, equals, setNumInputHex
     sw t0, 0(t1)
     end_word
 
-word_header equals, '=', 0, notEquals, setNumInputDec
+word_header equals, "=", 0, notEquals, setNumInputDec
     PopDataStack t0
     PopDataStack t1
     beq t0, t1, equals_equals
@@ -1295,7 +1297,8 @@ lt:
 lt_end:
     end_word
 
-word_header greaterThan, gt, first_system_word, lessThan
+last_vm_word: # IMPORTANT: KEEP THIS LABEL POINTING TO THE LAST VM WORD.
+word_header greaterThan, >, 0, first_system_word, lessThan
     PopDataStack t0
     PopDataStack t1
     bgt t0, t1, gt

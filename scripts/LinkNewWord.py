@@ -1,11 +1,5 @@
 from AssemblySrcParser import WordHeader, HeaderType, build_new_end_macro_line
 
-def link_existing_word_to_end(word_headers, newWord):
-    oldTail = word_headers[len(word_headers)-1]
-    oldTail.type = HeaderType.Middle
-    oldTail.next = newWord.name
-    newWord.prev = oldTail
-
 def add_new_word(word_headers, allLines, args):
     """
         word_headers: as returned from parse_lines

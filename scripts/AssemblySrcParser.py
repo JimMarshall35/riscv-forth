@@ -22,7 +22,8 @@ def build_new_macro_line(wordHeader, name, code, b_immediate, next, prev):
         return f"{wordHeader} {name}, {code}, {1 if b_immediate else 0}, {prev}"
     elif next != "" and prev == "":
         return f"{wordHeader} {name}, {code}, {1 if b_immediate else 0}, {next}"
-    
+    else:
+        assert False
 
 def build_new_end_macro_line(name, code, b_immediate, prev):
     return build_new_macro_line(word_header_last_str, name, code, b_immediate, "", prev)
@@ -102,19 +103,14 @@ class WordHeader:
             val = args[i]
             if sem == HeaderSemantic.Name:
                 self.name = val
-                pass
             elif sem == HeaderSemantic.Code:
                 self.code = val
-                pass
             elif sem == HeaderSemantic.IsImmediate:
                 self.b_is_valid = bool(val)
-                pass
             elif sem == HeaderSemantic.Next:
                 self.next = val
-                pass
             elif sem == HeaderSemantic.Prev:
                 self.prev = val
-                pass
 
     def validate(self):
         self.b_is_valid = False
