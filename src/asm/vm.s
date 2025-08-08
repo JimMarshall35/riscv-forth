@@ -1261,7 +1261,7 @@ word_header setNumInputDec, ioDec, 0, equals, setNumInputHex
     sw t0, 0(t1)
     end_word
 
-word_header equals, "=", 0, notEquals, setNumInputDec
+word_header equals, (=), 0, notEquals, setNumInputDec
     PopDataStack t0
     PopDataStack t1
     beq t0, t1, equals_equals

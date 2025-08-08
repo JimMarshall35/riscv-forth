@@ -1,0 +1,1 @@
+qemu-system-riscv32 -nographic -serial mon:stdio -machine virt -bios hello
