@@ -1,5 +1,6 @@
 import argparse
-from AssemblySrcParser import parse_lines, WordHeader, HeaderType, WordType
+from AssemblySrcParser import parse_lines
+from LinkNewWord import add_new_word
 from enum import Enum
 
 # Compile a forth source code file into gnu assembler threaded code for Risc-V forth VM 
@@ -18,9 +19,6 @@ forth_dict_file_lines = None
 bAsm_file_set = False
 word_name_map = dict()
 
-
-
-
 unset_label_phrase = "<<<LABEL_ACCEPTOR>>>"
 
 branch_word_name = "branch_impl"
@@ -35,19 +33,8 @@ twodup_word_name = "2dup"
 minus_word_name = "forth_minus_impl"
 equals_word_name = minus_word_name
 drop_word_name = "drop_impl"
+end_primitive_macro_name = "end_word"
 
-class CompiledLine:
-    def back_patch(self, label):
-        if unset_label_phrase in self.txt:
-            self.txt = self.txt.replace(unset_label_phrase, label[:-1])
-            return True
-        return False
-    def get_string(self):
-        return self.txt
-    def __init__(self, txt):
-        self.txt = txt
-        
-        
 class ControlFlowType(Enum):
     If = 0
     Then = 1
@@ -67,16 +54,36 @@ control_flow_type_names = {
     ControlFlowType.Loop : "loop"
 }
 
+class CompiledLine:
+    def back_patch(self, label):
+        if unset_label_phrase in self.txt:
+            self.txt = self.txt.replace(unset_label_phrase, label[:-1])
+            return True
+        return False
+    def get_string(self):
+        return self.txt
+    def __init__(self, txt):
+        self.txt = txt
+
 class CompiledWord:
     def get_lines(self):
         lines = []
-        # add header macros
-        lines.append(f"word_header {self.code}, {self.code}, {self.immediate if 1 else 0}, {self.nextWord}, {self.prevWord}")
-        lines.append(f"    secondary_word {self.code}")
-        # add word body
-        lines += [x.txt for x in self.body]
-        # add return
-        lines.append("    .word return_impl")
+        if self.bAsmWord:
+            # add header macros
+            lines.append(f"word_header {self.code}, {self.code}, {"1" if self.immediate else "0"}, {self.nextWord}, {self.prevWord}")
+            # add word body
+            lines += [x.txt for x in self.body]
+            # add return
+            lines.append(f"    {end_primitive_macro_name}")
+        else:
+            # add header macros
+            lines.append(f"word_header {self.code}, {self.code}, {"1" if self.immediate else "0"}, {self.nextWord}, {self.prevWord}")
+            lines.append(f"    secondary_word {self.code}")
+            # add word body
+            lines += [x.txt for x in self.body]
+            # add return
+            lines.append("    .word return_impl")
+        
         return lines
     def add_body_line(self, line):
         self.body.append(line)
@@ -97,6 +104,7 @@ class CompiledWord:
         self.body = []
         self.labelCounter = 0
         self.bReturned = False
+        self.bAsmWord = False
 
 
 class ControlFlow:
@@ -126,13 +134,27 @@ class Program:
         return self.compiledWords[-1].get_control_flow_label(ctrltype, extraText)
     def set_current_word_returned(self):
         self.compiledWords[-1].bReturned = True
+    def link_compiled_words(self):  # the dictionary is a linked list
+        for i in range(0, len(self.compiledWords)):
+            if i != 0:
+                self.compiledWords[i].set_prev(self.compiledWords[i- 1])
+            if i != len(self.compiledWords) - 1:
+                self.compiledWords[i].set_next(self.compiledWords[i+ 1])
+    def get_globals_for_word(self):
+        return [f".global {w.code}_impl" for w in self.compiledWords]
+    def get_preamble_lines(self):
+        return [".include \"VmMacros.S\""]
     def get_file_contents(self):
         lines = []
+        lines += self.get_preamble_lines()    # any includes for macros
+        lines += self.get_globals_for_word()  # global declarations so the words are useable by other translation units
+        lines.append(".text")
         for w in self.compiledWords:
             lines += w.get_lines()
             lines.append("\n")
         return "\n".join(lines)
     def save_to_file(self, filePath):
+        self.link_compiled_words()
         content = self.get_file_contents()
         with open(filePath, "w") as f:
             f.write(content)
@@ -151,17 +173,6 @@ class Program:
         self.compiledWords = []
         self.control_flow_stack = []
         self.compiledWordNames = set()
-
-class TokenIterator:
-    def get_next(self):
-        if self >= len(self.tokens):
-            return None
-        t = self.tokens[self.i]
-        self.i += 1
-        return t
-    def __init__(self, tokens):
-        self.tokens = tokens
-        self.i = 0
 
 def do_found_word(prg, token):
     lineTxt = f"    .word {word_name_map[token.string].name}_impl"
@@ -218,7 +229,7 @@ def do_until(prg, tokenItr, currentToken):
         return
     prg.append_line_to_current(f"    .word {branch0_word_name}")
     branch_offset_line = prg.append_line_to_current(f"    CalcBranchBackToLabel {unset_label_phrase}")
-    branch_offset_line.back_patch(ctrl_flow.compiledLine)
+    branch_offset_line.back_patch(ctrl_flow.compiledLine.get_string())
 
 def do_do(prg, tokenItr, currentToken):
     # branch to test
@@ -265,20 +276,60 @@ def do_loop(prg, tokenItr, currentToken):
     prg.append_line_to_current(f"    .word {drop_word_name}")
     prg.append_line_to_current(f"    .word {drop_word_name}")
 
+def string_is_valid_number(string):
+    return string.isnumeric() or (string[0] == '-' and string[1:].isnumeric())
+
 def do_var(prg, tokenItr, currentToken):
-    pass
+    #    la t1, flags_data
+    #    PushDataStack t1
+    #    end_word
+    #flags_data:
+    #    .word 0
+    wordName = next(tokenItr)
+    val = next(tokenItr)
+    if(not string_is_valid_number(val.string)):
+        prg.errors(f"Line {currentToken.srcLine}: buffer size was not a valid number")
+        return
+    w = CompiledWord(wordName.string)
+    w.bAsmWord = True
+    w.bReturned = True
+    prg.compiledWords.append(w)
+    prg.compiledWordNames.add(wordName.string)
+    prg.append_line_to_current(f"    la t1, {wordName.string}_data")
+    prg.append_line_to_current(f"    PushDataStack t1")
+    prg.append_line_to_current(f"    end_word")
+    prg.append_line_to_current(f"{wordName.string}_data:")
+    prg.append_line_to_current(f"    .word {val.string}")
+    
 def do_buf(prg, tokenItr, currentToken):
-    pass
+    # there's deviation from actual forth here, as
+    # this script is a compiler only of compiled words designed to bootstrap
+    # a traditional forth it lacks the ability to interpret so
+    # unlike in the real forth the size of the buffer is specified AFTER the name.
+    wordName = next(tokenItr)
+    bufferSize = next(tokenItr)
+    if(not string_is_valid_number(bufferSize.string)):
+        prg.errors(f"Line {currentToken.srcLine}: buffer size was not a valid number")
+        return
+    w = CompiledWord(wordName.string)
+    w.bAsmWord = True
+    w.bReturned = True
+    prg.compiledWords.append(w)
+    prg.compiledWordNames.add(wordName.string)
+    prg.append_line_to_current(f"    la t1, {wordName.string}_data")
+    prg.append_line_to_current(f"    PushDataStack t1")
+    prg.append_line_to_current(f"    end_word")
+    prg.append_line_to_current(f"{wordName.string}_data:")
+    prg.append_line_to_current(f"    .fill {bufferSize.string}, 1, 0")
 
 def do_semicolon(prg, tokenItr, currentToken):
     prg.set_current_word_returned()
-
 
 def do_colon(prg, tokenItr, currentToken):
     wordName = next(tokenItr)
     w = CompiledWord(wordName.string)
     prg.compiledWords.append(w)
-    prg.compiledWordNames.add(wordName)
+    prg.compiledWordNames.add(wordName.string)
 
 pseudo_tokens = {
     "if" : do_if,
@@ -301,10 +352,25 @@ def do_cmd_args():
     parser.add_argument("input_file", type=str, help="the input file to use")
     parser.add_argument("-a","--asm_file", type=str, help="the assembly file containing the prexisting precompiled forth dictionary. Needed to output word headers that are properly linked in with the others. If specified, will append output onto end of this file, and return a new copy as the output file. Also used to warn about words that can't be found")
     parser.add_argument("-o", "--output_file", type=str, help="output assembly file, defaults to out.asm")
+    parser.add_argument("-ao", "--asm_output_file", type=str, help="the output path of the new asm file which will have had its end word changed. only relevant if -a passed")
+    
     args = parser.parse_args()
     return args
 
+def remove_comments_from_token_list(tokens):
+    inComment = False
+    newTokens = []
+    for t in tokens:
+        if t.string == "(":
+            inComment = True
+        elif not inComment:
+            newTokens.append(t)
+        elif t.string == ")":
+            inComment = False
+    return newTokens
+
 def file_to_token_iterator(filePath):
+    # TODO: should also strip comments
     tokens = []
     with open(filePath, "r") as f:
         lines = f.readlines()
@@ -312,7 +378,9 @@ def file_to_token_iterator(filePath):
         for line in lines:
             line = line.replace("\n", "")
             line = line.replace("\t", "")
-            tokens = tokens + ([Token(x, onLine) for x in line.split()])
+            lineTokens = [Token(x, onLine) for x in line.split()]
+            lineTokensCommentsRemoved = remove_comments_from_token_list(lineTokens)
+            tokens = tokens + lineTokensCommentsRemoved
             onLine += 1
     return iter(tokens)
 
@@ -361,5 +429,9 @@ def main():
                 prg.warnings.append(f"Line {token.srcLine}: unknown token '{token.string}'")
     prg.print_warnings_and_errors()
     prg.save_to_file(args.output_file)
+    if args.asm_output_file and args.asm_file:
+        #if prg.
+        pass
+
     
 main()

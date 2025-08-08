@@ -25,6 +25,7 @@ def do_cmd_args():
     parser.add_argument('--immediate', action='store_true', help="make the new word immediate")
     parser.add_argument('--list_words', action='store_true', help="print a list of word")
     parser.add_argument('--report_types', action='store_true', help="print a report of the frequency of different types of words")
+    parser.add_argument('--globals_string', action='store_true', help="make a string of .global directives to add to a file and print in console")
     args = parser.parse_args()
     return args
 
@@ -144,6 +145,10 @@ def main():
         num_und  = sum(1 for x in word_headers if x.wordType == WordType.Undefined)
         print(f"Word Types:\nPrimative: {num_prim}\nSecondary: {num_sec}\nMalformed: {num_mal}\nUndefined: {num_und}\nTotal: {len(word_headers)}")
         pass
+
+    if args.globals_string:
+        for header in word_headers:
+            print(f".global {header.name}_impl")
 
     if args.new_word_name:
         add_new_word(word_headers, allLines, args)
