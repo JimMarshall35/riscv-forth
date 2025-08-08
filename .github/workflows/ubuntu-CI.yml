@@ -2,9 +2,9 @@ name: Ubuntu CI
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ "master" ]
+    branches: [ "main" ]
 
 env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
@@ -19,7 +19,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - name: Get Dependencies
+    - name: Get Build Dependencies
       run: |
         sudo apt update
         sudo apt install autoconf automake autotools-dev curl python3 libmpc-dev libmpfr-dev libgmp-dev gawk build-essential bison flex texinfo gperf libtool patchutils bc zlib1g-dev libexpat-dev
@@ -37,5 +37,4 @@ jobs:
     - name: Build
       # Build your program with the given configuration
       run: |
-        cd Stardew
         bash build.sh
