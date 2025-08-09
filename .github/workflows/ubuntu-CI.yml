@@ -13,7 +13,7 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: msatterthwaite/riscv:riscv_tc
+    container: jerryzj/riscv
     steps:
     - uses: actions/checkout@v4
     - name: Build
