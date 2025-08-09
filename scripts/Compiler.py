@@ -200,6 +200,7 @@ class Program:
         self.compiledWords = []
         self.control_flow_stack = []
         self.compiledWordNames = set()
+        self.constantDefines = dict()
 
 def do_found_word(prg, token):
     lineTxt = f"    .word {word_name_map[token.string].name}_impl"
@@ -358,6 +359,11 @@ def do_colon(prg, tokenItr, currentToken):
     prg.compiledWords.append(w)
     prg.compiledWordNames.add(wordName.string)
 
+def do_define(prg, tokenItr, currentToken):
+    defName = next(tokenItr).string
+    defVal = next(tokenItr).string
+    prg.constantDefines[defName] = defVal
+
 pseudo_tokens = {
     "if" : do_if,
     "then" : do_then,
@@ -369,7 +375,8 @@ pseudo_tokens = {
     "var" : do_var,
     "buf" : do_buf,
     ";" : do_semicolon,
-    ":" : do_colon
+    ":" : do_colon,
+    "#define" : do_define
 }
 def do_cmd_args():
     parser = argparse.ArgumentParser(
@@ -445,6 +452,8 @@ def main():
     tokenItr = file_to_token_iterator(args.input_file)
     prg = Program()
     for token in tokenItr:
+        if token.string in prg.constantDefines:
+            token.string = prg.constantDefines[token.string]
         if token.string in pseudo_tokens:
             pseudo_tokens[token.string](prg, tokenItr, token)
         elif token.string in word_name_map:
