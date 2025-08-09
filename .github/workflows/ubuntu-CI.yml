@@ -15,6 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     container: msatterthwaite/riscv:riscv_tc
     steps:
+    - uses: actions/checkout@v4
     - name: Build
       # Build your program with the given configuration
       run: |
