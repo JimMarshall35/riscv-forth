@@ -173,7 +173,7 @@ class WordHeader:
     
     def report_errors(self):
         assert len(self.errors) > 0
-        print(f"Word name: '{self.name}' errors: \n{'\n'.join(self.errors) + '\n'}")
+        print(f"Word name: '{self.name}' errors: {'\n'.join(self.errors) + '\n'}")
 
     def __init__(self, line_str, line_num):
         self.line_str = line_str
