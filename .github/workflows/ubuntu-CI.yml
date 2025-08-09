@@ -19,4 +19,6 @@ jobs:
     - name: Build
       # Build your program with the given configuration
       run: |
+        python3 --version
+        python --version
         make -C src/asm
