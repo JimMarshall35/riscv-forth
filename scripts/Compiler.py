@@ -72,14 +72,14 @@ class CompiledWord:
         lines = []
         if self.bAsmWord:
             # add header macros
-            lines.append(f"word_header {self.code}, {self.code}, {"1" if self.immediate else "0"}, {self.nextWord if self.nextWord else "0"}, {self.prevWord}")
+            lines.append(f"word_header {self.code}, {self.code}, {self.immediate_str()}, {self.nextWord if self.nextWord else "0"}, {self.prevWord}")
             # add word body
             lines += [x.txt for x in self.body]
             # add return
             lines.append(f"    {end_primitive_macro_name}")
         else:
             # add header macros
-            lines.append(f"word_header {self.code}, {self.code}, {"1" if self.immediate else "0"}, {self.nextWord if self.nextWord else "0"}, {self.prevWord}")
+            lines.append(f"word_header {self.code}, {self.code}, {self.immediate_str()}, {self.nextWord if self.nextWord else "0"}, {self.prevWord}")
             lines.append(f"    secondary_word {self.code}")
             # add word body
             lines += [x.txt for x in self.body]
@@ -98,6 +98,11 @@ class CompiledWord:
         self.nextWord = nextWord.code
     def set_prev(self, prevWord):
         self.prevWord = prevWord.code
+    def immediate_str(self):
+        if self.immediate:
+            return "1"
+        else:
+            return "0"
     def __init__(self, code):
         self.nextWord = ""
         self.prevWord = ""
