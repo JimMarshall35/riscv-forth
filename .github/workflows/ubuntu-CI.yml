@@ -24,4 +24,6 @@ jobs:
     - uses: actions/upload-artifact@v4
       with:
         name: my-artifact
-        path: ./hello
+        path: |
+          ./hello
+          src/asm/system.s
