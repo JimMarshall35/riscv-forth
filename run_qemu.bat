@@ -1,1 +1,1 @@
-qemu-system-riscv32 -nographic -serial mon:stdio -machine virt -bios hello
+qemu-system-riscv32 -nographic -serial mon:stdio -machine virt -bios hello -qmp tcp:localhost:4444,server,wait=off

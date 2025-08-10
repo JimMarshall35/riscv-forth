@@ -17,11 +17,9 @@
 .global return_impl
 .global forth_minus_impl
 .global swap_impl
-.global eval_impl
 .global drop_impl
 .global dup2_impl
 .global findXT_impl
-.global doPossibleNumToken_impl
 .global doWordFound_impl
 .global flags_impl
 .global setCompile_impl
@@ -37,7 +35,6 @@
 .global rot_impl
 .global push_return_impl
 .global pop_return_impl
-.global load_next_token_impl
 .global setTokenLookupErrorFlag_impl
 .global getTokenLookupErrorFlag_impl
 .global unsetTokenLookupErrorFlag_impl
@@ -50,7 +47,6 @@
 .global showR_impl
 .global setHere_impl
 .global return_stack_index_impl
-.global create_header_impl
 .global getHeaderNext_impl
 .global getHeaderPrev_impl
 .global setHeaderPrev_impl
@@ -59,7 +55,6 @@
 .global setDictionaryEnd_impl
 .global tokenBufferToHeaderCode_impl
 .global toCString_impl
-.global beginSecondaryWord_impl
 .global compileWord_impl
 .global endWord_impl
 .global getHeaderImmediate_impl
@@ -292,213 +287,14 @@ word_header forth_minus, -, 0, swap, return
     PushDataStack t3
     end_word
     
-word_header swap, swap, 0, eval, forth_minus
+word_header swap, swap, 0, drop, forth_minus
     PopDataStack t2
     PopDataStack t3
     PushDataStack t2
     PushDataStack t3
     end_word
 
-
-word_header eval, eval, 0, drop, swap
-    secondary_word eval
-    # ( stringPtr stringSize )
-    .word push_return_impl 
-    .word push_return_impl 
-    .word unsetTokenLookupErrorFlag_impl
-eval_start:                    # (  )
-    .word pop_return_impl      # ( stringPtr )
-    .word pop_return_impl      # ( stringPtr stringSize )
-    .word getTokenLookupErrorFlag_impl # ( stringPtr stringSize nonzeroIfSet)
-1:  .word branchIfZero_impl    # ( stringPtr stringSize )
-    CalcBranchForwardToLabel error_flag_not_set
-1:  .word branch_impl
-    CalcBranchForwardToLabel tokenNotFoundError
-error_flag_not_set:
-    .word dup_impl             # ( stringPtr stringSize stringSize ) 
-1:  .word branchIfZero_impl    # ( stringPtr stringSize ) 
-    CalcBranchForwardToLabel end_eval
-    .word swap_impl            # ( stringSize stringPtr )
-    .word dup_impl             # ( stringSize stringPtr stringPtr )
-    .word loadByte_impl        # ( stringSize stringPtr char )
-    .word dup_impl             # ( stringSize stringPtr char char )
-    .word literal_impl
-    .word 32                   # ( stringSize stringPtr char char 32 )
-    .word forth_minus_impl     # ( stringSize stringPtr char 0ifequal )
-1:  .word branchIfZero_impl    # ( stringSize stringPtr char )
-    CalcBranchForwardToLabel whitespace
-    .word tokenBuffer_impl     # ( stringSize stringPtr char tokenBuffer )
-    .word tokenBufferSize_impl # ( stringSize stringPtr char tokenBuffer &tokenBufferSize )
-    .word loadCell_impl        # ( stringSize stringPtr char tokenBuffer tokenBufferSize )
-    .word forth_add_impl       # ( stringSize stringPtr char tokenBuffer+tokenBufferSize )
-    .word storeByte_impl       # ( stringSize stringPtr )
-    .word tokenBufferSize_impl # ( stringSize stringPtr &tokenBufferSize )
-    .word loadCell_impl        # ( stringSize stringPtr tokenBufferSize )
-    .word literal_impl         
-    .word 1                    # ( stringSize stringPtr tokenBufferSize 1 )
-    .word forth_add_impl       # ( stringSize stringPtr tokenBufferSize+1 )
-    .word tokenBufferSize_impl # ( stringSize stringPtr tokenBufferSize+1 &tokenBufferSize )
-    .word store_impl           # ( stringSize stringPtr )
-    .word literal_impl         
-    .word 1                    # ( stringSize stringPtr 1 )
-    .word forth_add_impl       # ( stringSize stringPtr+1 )
-    .word swap_impl            # ( stringPtr+1 stringSize )
-    .word literal_impl          
-    .word 1                    # ( stringPtr+1 stringSize 1 )
-    .word forth_minus_impl     # ( stringPtr+1 stringSize-1 )
-    .word push_return_impl     # ( stringPtr+1 )
-    .word push_return_impl     # ( )
-1:  .word branch_impl
-    CalcBranchBackToLabel eval_start
-whitespace:
-    .word drop_impl             # ( stringSize stringPtr )
-    .word tokenBufferSize_impl  # ( stringSize stringPtr &tokenBufferSize )
-    .word loadCell_impl         # ( stringSize stringPtr tokenBufferSize )
-1:  .word branchIfZero_impl     # ( stringSize stringPtr )
-    CalcBranchForwardToLabel whitespace_end
-    # lookup token here      
-tokenBufferLookup:
-    .word tokenBufferSize_impl  # ( stringSize stringPtr &tokenBufferSize )
-    .word loadCell_impl         # ( stringSize stringPtr tokenBufferSize )
-    .word tokenBuffer_impl      # ( stringSize stringPtr tokenBufferSize tokenBufferPtr )
-    .word findXT_impl           # ( stringSize stringPtr xt )
-    .word dup_impl              # ( stringSize stringPtr xt xt )
-1:  .word branchIfZero_impl     # ( stringSize stringPtr xt )
-    CalcBranchForwardToLabel wordnotfound
-wordfound:
-    # word found
-1:  .word branch_impl
-    CalcBranchForwardToLabel wordfound_end
-wordnotfound:
-    .word drop_impl             # ( stringSize stringPtr )
-
-    # increment string ptr
-    .word literal_impl         
-    .word 1                     # ( stringSize stringPtr 1 )
-    .word forth_add_impl        # ( stringSize stringPtr+1 )
-
-    # decrement string size
-    .word swap_impl             # ( stringPtr+1 stringSize )
-    .word literal_impl          
-    .word 1                     # ( stringPtr+1 stringSize 1 )
-    .word forth_minus_impl      # ( stringPtr+1 stringSize-1 )
-
-    # store string variables on return stack
-    .word push_return_impl      # ( stringPtr+1 )
-    .word push_return_impl      # (  )
-
-    .word doPossibleNumToken_impl       # (  )
-    .word getTokenLookupErrorFlag_impl  # ( nonZeroIfSet )
-1:  .word branchIfZero_impl
-    CalcBranchForwardToLabel ErrorFlagIsUnset
-ErrorFlagIsSet:
-    # don't reset token buffer so we can report the token that was not found
-1:  .word branch_impl
-    CalcBranchForwardToLabel ErrorFlagEnd
-ErrorFlagIsUnset:
-    # reset tokenbuffersize
-    .word literal_impl 
-    .word 0                     # ( 0 )
-    .word tokenBufferSize_impl  # ( 0 &tokenBufferSize )
-    .word store_impl            # (  )
-ErrorFlagEnd:
-
-1:  .word branch_impl           
-    CalcBranchBackToLabel eval_start
-wordfound_end:
-    # shuffle xt to the back - we only execute it when the stack is clear
-    .word rot_impl               # ( stringPtr xt stringSize )
-    .word rot_impl               # ( xt stringSize stringPtr )
-
-    # reset tokenbuffersize
-    .word literal_impl 
-    .word 0                     # ( xt stringSize stringPtr 0 )
-    .word tokenBufferSize_impl  # ( xt stringSize stringPtr 0 &tokenBufferSize )
-    .word store_impl            # ( xt stringSize stringPtr )
-
-    # increment string ptr
-    .word literal_impl         
-    .word 1                     # ( xt stringSize stringPtr 1 )
-    .word forth_add_impl        # ( xt stringSize stringPtr+1 )
-
-    # decrement string size
-    .word swap_impl             # ( xt stringPtr+1 stringSize )
-    .word literal_impl          
-    .word 1                     # ( xt stringPtr+1 stringSize 1 )
-    .word forth_minus_impl      # ( xt stringPtr+1 stringSize-1 )
-
-    # store string variables on return stack
-    .word push_return_impl      # ( xt stringPtr+1 )
-    .word push_return_impl      # ( xt )
-
-    .word doWordFound_impl      # ( )
-1:  .word branch_impl           
-    CalcBranchBackToLabel eval_start
-whitespace_end:
-    # increment string ptr
-    .word literal_impl         
-    .word 1                     # ( stringSize stringPtr 1 )
-    .word forth_add_impl        # ( stringSize stringPtr+1 )
-    .word swap_impl             # ( stringPtr+1 stringSize )
-
-    # decrement string size
-    .word literal_impl          
-    .word 1                     # ( stringPtr+1 stringSize 1 )
-    .word forth_minus_impl      # ( stringPtr+1 stringSize-1 )
-    .word push_return_impl      # ( stringPtr+1 )
-    .word push_return_impl      # ( )
-1:  .word branch_impl           
-    CalcBranchBackToLabel eval_start
-end_eval:        
-                               # ( stringPtr stringSize ) 
-    .word tokenBufferSize_impl # ( stringPtr stringSize &tokenBufferSize )
-    .word loadCell_impl        # ( stringPtr stringSize tokenBufferSize )
-1:  .word branchIfZero_impl    # ( stringPtr stringSize )
-    CalcBranchForwardToLabel tokenBufferEmpty
-    # token buffer not empty, go back into the loop to deal with it
-    .word drop_impl            # ( stringPtr )
-    # set stringlength back to 1 so that the loop terminates after 1 go round
-    .word literal_impl
-    .word 1                    # ( stringPtr stringSize=1 )
-    # at the point we're going to jump to they're swapped for some reason
-    .word swap_impl            # ( stringSize=1 stringPtr )
-1:  .word branch_impl
-    CalcBranchBackToLabel tokenBufferLookup
-tokenBufferEmpty:
-    .word drop_impl
-    .word drop_impl  
-    .word return_impl
-tokenNotFoundError:
-    .word drop_impl
-    .word drop_impl  
-    
-    .word literal_impl 
-    .word error_msg_token       # ( errorStr )
-    .word literal_impl
-    .word ERROR_MSG_TOKEN_LEN   # ( errorStr errorStrLen)
-    .word print_impl            # ( )
-    
-    .word tokenBuffer_impl      # ( tokenBuf )
-    .word tokenBufferSize_impl  # ( tokenBuf &tokenBufferSize )
-    .word loadCell_impl         # ( tokenBuf tokenBufferSize )
-    .word print_impl
-    
-    .word literal_impl
-    .word error_msg_not_found    # ( errorStr )
-    .word literal_impl
-    .word ERROR_MSG_NOTFOUND_LEN # ( errorStr errorStrLen)
-    .word print_impl             # ( )
-
-    # reset tokenbuffersize
-    .word literal_impl 
-    .word 0                     # ( 0 )
-    .word tokenBufferSize_impl  # ( 0 &tokenBufferSize )
-    .word store_impl            # (  )
-
-    .word return_impl
-
-
-word_header drop, drop, 0, dup2, eval
+word_header drop, drop, 0, dup2, swap
     PopDataStack t1
     end_word
     
@@ -511,7 +307,7 @@ word_header dup2, "2dup", 0, findXT, drop
     PushDataStack t1
     end_word
     
-word_header findXT, findXT, 0, doPossibleNumToken, dup2
+word_header findXT, findXT, 0, flags, dup2
     PopDataStack t5   # t5 == string ptr
     PopDataStack t6   # t6 == string length
     
@@ -545,53 +341,9 @@ word_header findXT, findXT, 0, doPossibleNumToken, dup2
 3:
     addi t4, t4, HEADER_SIZE
     PushDataStack t4
-    end_word
-        
-word_header doPossibleNumToken, doPossibleNumToken, 0, doWordFound, findXT
-    secondary_word doPossibleNumToken
-    .word tokenBuffer_impl                      # ( pTokenBuffer )
-    .word tokenBufferSize_impl                  # ( pTokenBuffer &tokenBufferSize )
-    .word loadCell_impl                         # ( pTokenBuffer tokenBufferSize )
-    .word dup2_impl                             # ( pTokenBuffer tokenBufferSize pTokenBuffer tokenBufferSize )
-    .word isStringValidNumber_impl              # ( pTokenBuffer tokenBufferSize bIsValid )
-1:  .word branchIfZero_impl                     # ( pTokenBuffer tokenBufferSize )
-    CalcBranchForwardToLabel num_invalid_string #
-                                                # convert string to number  
-    .word forth_fatoi_impl                      # ( num )
-1:  .word branch_impl                           #
-    CalcBranchForwardToLabel num_valid_string   # 
-num_invalid_string:                             #
-    .word drop_impl                             # ( pTokenBuffer )
-    .word drop_impl                             # (  )
-    .word setTokenLookupErrorFlag_impl
-    .word return_impl
-num_valid_string:
-    .word return_impl                 
-    
-word_header doWordFound, doWordFound, 0, flags, doPossibleNumToken
-    # ( xt -- )
-    secondary_word doWordFound
-    .word get_compile_bit_impl    # ( xt 0IfNotSet )
-1:  .word branchIfZero_impl       # ( xt )
-    CalcBranchForwardToLabel word_found_interpret_mode
-    # compile mode
-    .word dup_impl                # ( xt xt )
-    .word isXTImmediate_impl      # ( xt 0IfNotImmediate )
-1:  .word branchIfZero_impl       # ( xt )
-    CalcBranchForwardToLabel doWordFound_notImm
-    # we are immediate - execute token
-1:  .word branch_impl
-    CalcBranchForwardToLabel word_found_interpret_mode
-doWordFound_notImm:
-    .word compileWord_impl         # ( )
-1:  .word branch_impl
-    CalcBranchForwardToLabel doWordFound_end
-word_found_interpret_mode:
-    .word execute_impl            # ( )
-doWordFound_end:
-    .word return_impl
+    end_word          
 
-word_header flags, flags, 0, setCompile, doWordFound
+word_header flags, flags, 0, setCompile, findXT
     la t1, flags_data
     PushDataStack t1
     end_word
@@ -684,118 +436,12 @@ word_header push_return, ">R", 0, pop_return, rot
     PushReturnStack t1
     end_word
 
-word_header pop_return, "<R", 0, load_next_token, push_return
+word_header pop_return, "<R", 0, print, push_return
     PopReturnStack t1
     PushDataStack t1
     end_word
 
-word_header load_next_token, lnt, 0, setTokenLookupErrorFlag, pop_return
-    secondary_word load_next_token
-
-    .word literal_impl            #
-    .word 0                       # ( 0 )
-    .word tokenBufferSize_impl    # ( 0 &tokenBufferSize )
-    .word store_impl              # ( )
-    .word literal_impl            # 
-    .word -5                      # ( -5 )
-    .word return_stack_index_impl # ( &R[-5] )  numCharsLeft = R[-5]
-    .word loadCell_impl           # ( numCharsLeft )
-    .word literal_impl            # 
-    .word -4                      # ( numCharsLeft -1 )
-    .word return_stack_index_impl # ( numCharsLeft &R[-5] ) stringPtr = R[-5]
-    .word loadCell_impl           # ( numCharsLeft stringPtr )
-lnt_start:
-    .word dup_impl                # ( numCharsLeft stringPtr stringPtr )
-    .word loadByte_impl           # ( numCharsLeft stringPtr char )
-    .word dup_impl                # ( numCharsLeft stringPtr char char )
-    .word literal_impl            #
-    .word 32                      # ( numCharsLeft stringPtr char char 32 )
-    .word forth_minus_impl        # ( numCharsLeft stringPtr char 0ifwhitespace )
-1:  .word branchIfZero_impl       # ( numCharsLeft stringPtr char )
-    CalcBranchForwardToLabel lnt_whitespace
-    # not whitespace
-
-    .word tokenBuffer_impl        # ( numCharsLeft stringPtr char tokenBuffer )
-    .word tokenBufferSize_impl    # ( numCharsLeft stringPtr char tokenBuffer &tokenBufferSize )
-    .word loadCell_impl           # ( numCharsLeft stringPtr char tokenBuffer tokenBufferSize )
-    .word forth_add_impl          # ( numCharsLeft stringPtr char tokenBuffer+tokenBufferSize )
-    .word storeByte_impl          # ( numCharsLeft stringPtr )
-    .word tokenBufferSize_impl    # ( numCharsLeft stringPtr &tokenBufferSize )
-    .word loadCell_impl           # ( numCharsLeft stringPtr tokenBufferSize )
-    .word literal_impl            #
-    .word 1                       # ( numCharsLeft stringPtr tokenBufferSize 1 )
-    .word forth_add_impl          # ( numCharsLeft stringPtr tokenBufferSize+1 )
-    .word tokenBufferSize_impl    # ( numCharsLeft stringPtr tokenBufferSize+1 &tokenBufferSize )
-    .word store_impl              # ( numCharsLeft stringPtr )
-1:  .word branch_impl             #
-    CalcBranchForwardToLabel tb_zero
-lnt_whitespace:                   # ( numCharsLeft stringPtr char )
-    .word drop_impl               # ( numCharsLeft stringPtr )
-lnt_whitespace_skipdrop:
-    .word tokenBufferSize_impl    # ( numCharsLeft stringPtr &tokenBufferSize )
-    .word loadCell_impl           # ( numCharsLeft stringPtr tokenBufferSize )
-1:  .word branchIfZero_impl       # ( numCharsLeft stringPtr )
-    CalcBranchForwardToLabel tb_zero
-1:  .word branch_impl             # ( numCharsLeft stringPtr )
-    CalcBranchForwardToLabel lnt_end
-tb_zero:
-    .word literal_impl            # 
-    .word 1                       # ( numCharsLeft stringPtr 1 )
-    .word forth_add_impl          # ( numCharsLeft stringPtr+1 )
-    .word swap_impl               # ( stringPtr+1 numCharsLeft )
-    .word literal_impl            #
-    .word 1                       # ( stringPtr+1 numCharsLeft 1 )
-    .word forth_minus_impl        # ( stringPtr+1 numCharsLeft-1 )
-    .word swap_impl               # ( numCharsLeft stringPtr )
-1:  .word branch_impl             # 
-    CalcBranchBackToLabel lnt_start
-lnt_end:                          # ( numCharsLeft stringptr )
-    .word literal_impl            # 
-    .word -4                      # ( numCharsLeft stringptr -1 )
-    .word return_stack_index_impl # ( numCharsLeft stringptr &R[-1] ) stringPtr = R[-2]
-    .word store_impl              # ( numCharsLeft )
-    .word literal_impl            # 
-    .word -5                      # ( numCharsLeft -2 )
-    .word return_stack_index_impl # ( numCharsLeft &R[-2] )  numCharsLeft = R[-2]
-    .word store_impl              # ( )
-    .word return_impl
-    
-word_header setTokenLookupErrorFlag, setTokenLookupErrorFlag, 0, getTokenLookupErrorFlag, load_next_token
-    secondary_word setTokenLookupErrorFlag
-    .word flags_impl           # ( &flags )
-    .word loadCell_impl        # ( flags )
-    .word literal_impl
-    .word FIND_TOKEN_ERROR_BIT # ( flags FIND_TOKEN_ERROR_BIT )
-    .word forth_or_impl        # ( flags|FIND_TOKEN_ERROR_BIT )
-    .word flags_impl           # ( flags|FIND_TOKEN_ERROR_BIT &flags )
-    .word store_impl           # ( )
-    .word return_impl
-
-word_header getTokenLookupErrorFlag, getTokenLookupErrorFlag, 0, unsetTokenLookupErrorFlag, setTokenLookupErrorFlag
-    secondary_word getTokenLookupErrorFlag
-    .word flags_impl           # ( &flags )
-    .word loadCell_impl        # ( flags )
-    .word literal_impl         # 
-    .word FIND_TOKEN_ERROR_BIT # ( flags COMPILE_BIT )
-    .word forth_and_impl       # ( flags&COMPILE_BIT )
-    .word return_impl
-
-word_header unsetTokenLookupErrorFlag, unsetTokenLookupErrorFlag, 0, print, getTokenLookupErrorFlag
-    secondary_word unsetTokenLookupErrorFlag
-    .word flags_impl           # ( &flags )
-    .word loadCell_impl        # ( flags )
-    .word literal_impl
-    .word FIND_TOKEN_ERROR_BIT # ( flags FIND_TOKEN_ERROR_BIT )
-    .word literal_impl         # ( flags FIND_TOKEN_ERROR_BIT -1 )
-    .word -1
-    .word forth_xor_impl       # ( flags ~FIND_TOKEN_ERROR_BIT )
-    .word forth_and_impl       # ( flags&~FIND_TOKEN_ERROR_BIT )
-    .word flags_impl           # ( flags&~FIND_TOKEN_ERROR_BIT &flags )
-    .word store_impl           # ( )
-    .word return_impl
-
-
-word_header print, print, 0, isCharValidNumber, unsetTokenLookupErrorFlag
+word_header print, print, 0, isCharValidNumber, pop_return
     secondary_word print
     # ( pString nStringSize -- )
     .word push_return_impl    # ( pString )
@@ -1036,7 +682,7 @@ word_header setHere, setHere, 0, return_stack_index, showR
     PopDataStack s5
     end_word
 
-word_header return_stack_index, R[], 0, create_header, setHere
+word_header return_stack_index, R[], 0, getHeaderNext, setHere
     PopDataStack t3
     bgt t3, zero, invalid_rstack_index
     mv t0, s3 # s3 - return stack base pointer
@@ -1057,34 +703,8 @@ invalid_rstack_index:
     PushDataStack t3
     end_word
 
-word_header create_header, create_header, 0, getHeaderNext, return_stack_index
-    # ( -- pHeader)
-    secondary_word create_header
-    .word load_next_token_impl            # ( )
-    .word here_impl                       # ( here )
-    .word dup_impl                        # ( here here )
-    .word literal_impl                    #
-    .word HEADER_SIZE                     # ( here here HEADER_SIZE )
-    .word forth_add_impl                  # ( here here+HEADER_SIZE )
-    .word setHere_impl                    # ( here )
-    .word dup_impl                        # ( here here )
-    .word getDictionaryEnd_impl           # ( here here pDictEnd )
-    .word setHeaderPrev_impl              # ( here )
-    .word dup_impl                        # ( here here )
-    .word getDictionaryEnd_impl           # ( here here pDictEnd )
-    .word swap_impl                       # ( here pDictEnd here )
-    .word setHeaderNext_impl              # ( here )
-    .word dup_impl                        # ( here here )
-    .word literal_impl                    # ( here here 0 )
-    .word 0                               #    
-    .word swap_impl                       # ( here 0 here )
-    .word setHeaderPrev_impl              # ( here )
-    .word dup_impl                        # ( here here )
-    .word show_impl                       
-    .word tokenBufferToHeaderCode_impl    # ( here )
-    .word return_impl 
 
-word_header getHeaderNext, getHeaderNext, 0, getHeaderPrev, create_header
+word_header getHeaderNext, getHeaderNext, 0, getHeaderPrev, return_stack_index
     secondary_word getHeaderNext
     # ( pHeader -- pHeader->pNext )
     .word literal_impl
@@ -1149,7 +769,7 @@ word_header tokenBufferToHeaderCode, tokenBufferToHeaderCode, 0, toCString, setD
     .word return_impl
 
 
-word_header toCString, toCString, 0, beginSecondaryWord, tokenBufferToHeaderCode
+word_header toCString, toCString, 0, compileWord, tokenBufferToHeaderCode
     # ( inStringLen inString outCString -- )
     PopDataStack a0
     PopDataStack a1
@@ -1157,35 +777,35 @@ word_header toCString, toCString, 0, beginSecondaryWord, tokenBufferToHeaderCode
     call forth_string_to_c
     end_word
 
-word_header beginSecondaryWord, bw, 0, compileWord, toCString
-    # ( -- pNewWordHeader )
-    secondary_word beginSecondaryWord
-    .word create_header_impl      # ( pHeader )
-    .word setCompile_impl      
-    .word literal_impl
-    .word 0x014982b3
-    .word compileWord_impl
-    .word literal_impl
-    .word 0x0082a023
-    .word compileWord_impl
-    .word literal_impl
-    .word 0x004a0a13
-    .word compileWord_impl
-    .word literal_impl
-    .word 0x00000417
-    .word compileWord_impl
-    .word literal_impl
-    .word 0x00040413
-    .word compileWord_impl
-    .word literal_impl
-    .word 0x00042283
-    .word compileWord_impl
-    .word literal_impl
-    .word 0x000280e7b
-    .word compileWord_impl
-    .word return_impl
+# word_header beginSecondaryWord, bw, 0, compileWord, toCString
+#     # ( -- pNewWordHeader )
+#     secondary_word beginSecondaryWord
+#     .word create_header_impl      # ( pHeader )
+#     .word setCompile_impl      
+#     .word literal_impl
+#     .word 0x014982b3
+#     .word compileWord_impl
+#     .word literal_impl
+#     .word 0x0082a023
+#     .word compileWord_impl
+#     .word literal_impl
+#     .word 0x004a0a13
+#     .word compileWord_impl
+#     .word literal_impl
+#     .word 0x00000417
+#     .word compileWord_impl
+#     .word literal_impl
+#     .word 0x00040413
+#     .word compileWord_impl
+#     .word literal_impl
+#     .word 0x00042283
+#     .word compileWord_impl
+#     .word literal_impl
+#     .word 0x000280e7b
+#     .word compileWord_impl
+#     .word return_impl
 
-word_header compileWord, cw, 0, endWord, beginSecondaryWord
+word_header compileWord, cw, 0, endWord, toCString
     # ( word -- )
     secondary_word compileWord
     .word here_impl      # ( word here )
@@ -1273,27 +893,27 @@ equals_equals:
 equals_end:
     end_word
     
-word_header notEquals, nq, 0, lessThan, equals
-    PopDataStack t0
+word_header notEquals, (!=), 0, lessThan, equals
     PopDataStack t1
-    bne t0, t1, nq_equals
+    PopDataStack t2
+    bne t1, t2, nq_equals
     PushDataStack zero
     j nq_end
 nq_equals:
-    li t1, 1
-    PushDataStack t1 
+    li t2, 1
+    PushDataStack t2 
 nq_end:
     end_word
     
 word_header lessThan, <, 0, greaterThan, notEquals
-    PopDataStack t0
     PopDataStack t1
-    blt t0, t1, lt
+    PopDataStack t2
+    blt t2, t1, lt
     PushDataStack zero
     j lt_end
 lt:
-    li t1, 1
-    PushDataStack t1
+    li t2, 1
+    PushDataStack t2
 lt_end:
     end_word
 

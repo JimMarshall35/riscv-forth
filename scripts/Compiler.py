@@ -81,7 +81,7 @@ class CompiledWord:
             # add word body
             lines += [x.txt for x in self.body]
             # add return
-            lines.append(f"    {end_primitive_macro_name}")
+            #lines.append(f"    {end_primitive_macro_name}")
         else:
             # add header macros
             lines.append(f"word_header {self.code}, {self.code}, {self.immediate_str()}, {nextword_str(self.nextWord)}, {self.prevWord}")
@@ -131,6 +131,16 @@ class Token:
         self.srcLine = srcLine
 
 class Program:
+    def push_new_word(self, name, bAsmWord=False):
+        if len(self.control_flow_stack) > 0:
+            assert len(self.compiledWords) > 0
+            self.errors.append(f"Word {self.compiledWords[-1].code} unclosed control flow. Type '{control_flow_type_names[self.control_flow_stack[-1].type]}'")
+        newWord = CompiledWord(name)
+        newWord.bAsmWord = bAsmWord
+        if bAsmWord:
+            newWord.bReturned = True
+        self.compiledWords.append(newWord)
+        pass
     def push_control_flow(self, compiledLine, type):
         self.control_flow_stack.append(ControlFlow(compiledLine, type))
     def pop_control_flow(self):
@@ -217,11 +227,11 @@ def do_if(prg, tokenItr, currentToken):
 
 def do_then(prg, tokenItr, currentToken):
     if len(prg.control_flow_stack) == 0:
-        prg.errors(f"Line {currentToken.srcLine}: then with no corresponding if")
+        prg.errors.append(f"Line {currentToken.srcLine}: then with no corresponding if")
         return
     ctrl_flow = prg.pop_control_flow()
     if ctrl_flow.type != ControlFlowType.If and ctrl_flow.type != ControlFlowType.Else:
-        prg.errors(f"Line {currentToken.srcLine}: {control_flow_type_names[ctrl_flow.type]} on control flow stack, 'if' expected")
+        prg.errors.append(f"Line {currentToken.srcLine}: {control_flow_type_names[ctrl_flow.type]} on control flow stack, 'if' expected")
         return
     label = prg.get_control_flow_label_for_current(ControlFlowType.Then)
     ctrl_flow.compiledLine.back_patch(label)
@@ -229,11 +239,11 @@ def do_then(prg, tokenItr, currentToken):
 
 def do_else(prg, tokenItr, currentToken):
     if len(prg.control_flow_stack) == 0:
-        prg.errors(f"Line {currentToken.srcLine}: else with no corresponding if")
+        prg.errors.append(f"Line {currentToken.srcLine}: else with no corresponding if")
         return
     ctrl_flow = prg.pop_control_flow()
     if ctrl_flow.type != ControlFlowType.If:
-        prg.errors(f"Line {currentToken.srcLine}: {control_flow_type_names[ctrl_flow.type]} on control flow stack, 'if' expected")
+        prg.errors.append(f"Line {currentToken.srcLine}: {control_flow_type_names[ctrl_flow.type]} on control flow stack, 'if' expected")
         return
     prg.append_line_to_current(f"1:  .word {branch_word_name}")
     branch_offset_line = prg.append_line_to_current(f"    CalcBranchForwardToLabel {unset_label_phrase}")
@@ -249,11 +259,11 @@ def do_begin(prg, tokenItr, currentToken):
 
 def do_until(prg, tokenItr, currentToken):
     if len(prg.control_flow_stack) == 0:
-        prg.errors(f"Line {currentToken.srcLine}: then with no corresponding if")
+        prg.errors.append(f"Line {currentToken.srcLine}: then with no corresponding if")
         return
     ctrl_flow = prg.pop_control_flow()
     if ctrl_flow.type != ControlFlowType.Begin:
-        prg.errors(f"Line {currentToken.srcLine}: {control_flow_type_names[ctrl_flow.type]} on control flow stack, 'begin' expected")
+        prg.errors.append(f"Line {currentToken.srcLine}: {control_flow_type_names[ctrl_flow.type]} on control flow stack, 'begin' expected")
         return
     prg.append_line_to_current(f"1:  .word {branch0_word_name}")
     branch_offset_line = prg.append_line_to_current(f"    CalcBranchBackToLabel {unset_label_phrase}")
@@ -275,12 +285,12 @@ def do_do(prg, tokenItr, currentToken):
 
 def do_loop(prg, tokenItr, currentToken):
     if len(prg.control_flow_stack) < 2:
-        prg.errors(f"Line {currentToken.srcLine}: loop expects at least 2 control flow items on the stack")
+        prg.errors.append(f"Line {currentToken.srcLine}: loop expects at least 2 control flow items on the stack")
         return
     loopStartLabel = prg.pop_control_flow()
     branchToTest = prg.pop_control_flow()
     if loopStartLabel.type != ControlFlowType.Do or branchToTest.type != ControlFlowType.Do:
-        prg.errors(f"Line {currentToken.srcLine}: loop expects the 2 control flow items on the stack are of type 'Do' but got [{control_flow_type_names[label.type]}, {control_flow_type_names[branch.type]}]")
+        prg.errors.append(f"Line {currentToken.srcLine}: loop expects the 2 control flow items on the stack are of type 'Do' but got [{control_flow_type_names[label.type]}, {control_flow_type_names[branch.type]}]")
         return
     # compile code to pop limit
     prg.append_line_to_current(f"    .word {pop_return_stack_word_name}")
@@ -316,12 +326,10 @@ def do_var(prg, tokenItr, currentToken):
     wordName = next(tokenItr)
     val = next(tokenItr)
     if(not string_is_valid_number(val.string)):
-        prg.errors(f"Line {currentToken.srcLine}: buffer size was not a valid number")
+        prg.errors.append(f"Line {currentToken.srcLine}: buffer size was not a valid number")
         return
-    w = CompiledWord(wordName.string)
-    w.bAsmWord = True
-    w.bReturned = True
-    prg.compiledWords.append(w)
+    prg.push_new_word(wordName.string, True)
+    
     prg.compiledWordNames.add(wordName.string)
     prg.append_line_to_current(f"    la t1, {wordName.string}_data")
     prg.append_line_to_current(f"    PushDataStack t1")
@@ -337,12 +345,9 @@ def do_buf(prg, tokenItr, currentToken):
     wordName = next(tokenItr)
     bufferSize = next(tokenItr)
     if(not string_is_valid_number(bufferSize.string)):
-        prg.errors(f"Line {currentToken.srcLine}: buffer size was not a valid number")
+        prg.errors.append(f"Line {currentToken.srcLine}: buffer size was not a valid number")
         return
-    w = CompiledWord(wordName.string)
-    w.bAsmWord = True
-    w.bReturned = True
-    prg.compiledWords.append(w)
+    prg.push_new_word(wordName.string, True)
     prg.compiledWordNames.add(wordName.string)
     prg.append_line_to_current(f"    la t1, {wordName.string}_data")
     prg.append_line_to_current(f"    PushDataStack t1")
@@ -355,14 +360,28 @@ def do_semicolon(prg, tokenItr, currentToken):
 
 def do_colon(prg, tokenItr, currentToken):
     wordName = next(tokenItr)
-    w = CompiledWord(wordName.string)
-    prg.compiledWords.append(w)
+    prg.push_new_word(wordName.string)
     prg.compiledWordNames.add(wordName.string)
 
 def do_define(prg, tokenItr, currentToken):
     defName = next(tokenItr).string
     defVal = next(tokenItr).string
     prg.constantDefines[defName] = defVal
+
+def do_string(prg, tokenItr, currentToken):
+    # TODO:  the tokenizer function needs to extract everything between " pairs as 1 token!!
+    defName = next(tokenItr).string
+    defVal = next(tokenItr).string 
+    prg.push_new_word(defName, True)
+    prg.compiledWordNames.add(defName)
+    prg.append_line_to_current(f"    li t1, {str(len(defVal) - 2)}") # -2 for the ""
+    prg.append_line_to_current(f"    PushDataStack t1")
+    prg.append_line_to_current(f"    la t1, {defName}_data")
+    prg.append_line_to_current(f"    PushDataStack t1")
+    prg.append_line_to_current(f"    end_word")
+    prg.append_line_to_current(f"{defName}_data:")
+    prg.append_line_to_current(f"    .ascii {defVal}")
+    prg.append_line_to_current( "    .align 4")
 
 pseudo_tokens = {
     "if" : do_if,
@@ -376,7 +395,8 @@ pseudo_tokens = {
     "buf" : do_buf,
     ";" : do_semicolon,
     ":" : do_colon,
-    "#define" : do_define
+    "#define" : do_define,
+    "string" : do_string
 }
 def do_cmd_args():
     parser = argparse.ArgumentParser(
