@@ -769,7 +769,7 @@ word_header tokenBufferToHeaderCode, tokenBufferToHeaderCode, 0, toCString, setD
     .word return_impl
 
 
-word_header toCString, toCString, 0, compileWord, tokenBufferToHeaderCode
+word_header toCString, toCString, 0, beginSecondaryWord, tokenBufferToHeaderCode
     # ( inStringLen inString outCString -- )
     PopDataStack a0
     PopDataStack a1
@@ -777,35 +777,35 @@ word_header toCString, toCString, 0, compileWord, tokenBufferToHeaderCode
     call forth_string_to_c
     end_word
 
-# word_header beginSecondaryWord, bw, 0, compileWord, toCString
-#     # ( -- pNewWordHeader )
-#     secondary_word beginSecondaryWord
-#     .word create_header_impl      # ( pHeader )
-#     .word setCompile_impl      
-#     .word literal_impl
-#     .word 0x014982b3
-#     .word compileWord_impl
-#     .word literal_impl
-#     .word 0x0082a023
-#     .word compileWord_impl
-#     .word literal_impl
-#     .word 0x004a0a13
-#     .word compileWord_impl
-#     .word literal_impl
-#     .word 0x00000417
-#     .word compileWord_impl
-#     .word literal_impl
-#     .word 0x00040413
-#     .word compileWord_impl
-#     .word literal_impl
-#     .word 0x00042283
-#     .word compileWord_impl
-#     .word literal_impl
-#     .word 0x000280e7b
-#     .word compileWord_impl
-#     .word return_impl
+word_header beginSecondaryWord, bw, 0, compileWord, toCString
+    # ( -- pNewWordHeader )
+    secondary_word beginSecondaryWord
+    #.word create_header_impl      # ( pHeader )
+    .word setCompile_impl      
+    .word literal_impl
+    .word 0x014982b3
+    .word compileWord_impl
+    .word literal_impl
+    .word 0x0082a023
+    .word compileWord_impl
+    .word literal_impl
+    .word 0x004a0a13
+    .word compileWord_impl
+    .word literal_impl
+    .word 0x00000417
+    .word compileWord_impl
+    .word literal_impl
+    .word 0x00040413
+    .word compileWord_impl
+    .word literal_impl
+    .word 0x00042283
+    .word compileWord_impl
+    .word literal_impl
+    .word 0x000280e7b
+    .word compileWord_impl
+    .word return_impl
 
-word_header compileWord, cw, 0, endWord, toCString
+word_header compileWord, cw, 0, setNumInputHex, beginSecondaryWord
     # ( word -- )
     secondary_word compileWord
     .word here_impl      # ( word here )
@@ -818,53 +818,7 @@ word_header compileWord, cw, 0, endWord, toCString
     .word return_impl
 
 
-word_header endWord, end, 1, getHeaderImmediate, compileWord
-    # ( pNewWordHeader -- ) IMMEDIATE
-    secondary_word endWord
-    .word setDictionaryEnd_impl   # ( )
-    .word literal_impl            # 
-    .word return_impl             # ( return_impl )
-    .word compileWord_impl        # ( )
-    .word setInterpret_impl       #
-    .word return_impl
-
-
-word_header getHeaderImmediate, getHeaderImmediate, 0, setHeaderImmediate, endWord
-    # ( pHeader -- pHeader->bImmediate )
-    secondary_word getHeaderImmediate
-    .word literal_impl
-    .word OFFSET_IMM       # ( pHeader OFFSET_IMM )
-    .word forth_add_impl   # ( pHeader+OFFSET_IMM )
-    .word loadCell_impl    # ( pHeader->bImmediate )
-    .word return_impl
-    
-
-word_header setHeaderImmediate, setHeaderImmediate, 0, getXTHeader, getHeaderImmediate
-    # ( pNext pHeader -- )
-    secondary_word setHeaderImmediate
-    .word literal_impl
-    .word OFFSET_IMM      # ( pNext pHeader OFFSET_IMM )
-    .word forth_add_impl   # ( pNext pHeader+OFFSET_IMM )
-    .word store_impl       # ( )
-    .word return_impl
-
-
-word_header getXTHeader, getXTHeader, 0, isXTImmediate, setHeaderImmediate
-    # ( xt -- pHeader )
-    secondary_word getXTHeader
-    .word literal_impl     #
-    .word HEADER_SIZE      # ( xt HEADER_SIZE )
-    .word forth_minus_impl # ( xt-HEADER_SIZE )
-    .word return_impl
-
-word_header isXTImmediate, isXTImmediate, 0, setNumInputHex, getXTHeader
-    # ( xt -- 0IfNotImmediate )
-    secondary_word isXTImmediate
-    .word getXTHeader_impl          # ( pHeader )
-    .word getHeaderImmediate_impl   # ( pHeader->bImmediate )
-    .word return_impl
-
-word_header setNumInputHex, ioHex, 0, setNumInputDec, isXTImmediate
+word_header setNumInputHex, ioHex, 0, setNumInputDec, compileWord
     la t1, vm_flags
     lw t0, 0(t1)
     ori t0, t0, NUM_IO_HEX_BIT

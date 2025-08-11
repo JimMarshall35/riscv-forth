@@ -3,6 +3,10 @@
 #define ENTER_CHAR 127
 #define BACKSPACE_CHAR 8
 #define SPACE_CHAR 32
+#define HEADER_SIZE 44
+#define OFFSET_IMM 36
+#define CELL_SIZE 4
+
 
 buf LineBuffer_ 128
 var LineBufferSize_ 0
@@ -19,6 +23,16 @@ string LiteralStr_ "literal"
 string UnknownTokenStartStr_ "unknowntoken:'" ( TODO: needs compiler change to allow spaces within strings but not high priority )
 
 string UnknownTokenEndStr_ "'\n"
+
+
+: setHeaderImmediate ( bImm pHeader -- ) OFFSET_IMM + ! ;
+
+: getHeaderImmediate ( pHeader -- pHeader->bImmediate ) OFFSET_IMM + @ ; 
+
+: getXTHeader ( xt -- xtHeader ) HEADER_SIZE - ; 
+
+: getXTImmediate ( xt -- 0IfNotImmediate ) getXTHeader getHeaderImmediate ;
+
 
 : doToken  
     TokenBufferSize_ @ Tokenbuffer_ findXT

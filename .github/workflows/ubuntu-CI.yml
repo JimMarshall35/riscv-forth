@@ -19,7 +19,7 @@ jobs:
     - name: Build
       # Build your program with the given configuration
       run: |
-        python3 scripts/Compiler.py src/forth/outer.forth -a src/asm/vm.s -o src/asm/system.s
+        python3 scripts/Compiler.py src/forth/system.forth -a src/asm/vm.s -o src/asm/system.s
         make -C src/asm
     - uses: actions/upload-artifact@v4
       with:

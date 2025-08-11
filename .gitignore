@@ -1,2 +1,3 @@
 *.o
-src/scripts/__pycache__
+src/scripts/__pycache__/
+src/asm/system.s
