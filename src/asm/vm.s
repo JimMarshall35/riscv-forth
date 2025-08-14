@@ -435,103 +435,18 @@ word_header push_return, ">R", 0, pop_return, rot
     PushReturnStack t1
     end_word
 
-word_header pop_return, "<R", 0, isCharValidNumber, push_return
+word_header pop_return, "<R", 0, forth_fatoi, push_return
     PopReturnStack t1
     PushDataStack t1
     end_word
 
-word_header isCharValidNumber, isCharValidNumber, 0, isStringValidNumber, pop_return
-    # ( char -- 0IfNotValid )
-    secondary_word isCharValidNumber
-    .word literal_impl                             # ( char numChar )
-    .word '-'                                      #
-    .word dup2_impl                                # ( char numChar char numChar )
-    .word forth_minus_impl                         # ( char numChar char-numChar )
-1:  .word branchIfZero_impl                        # ( char numChar )
-    CalcBranchForwardToLabel return_char_valid     #
-    .word drop_impl                                # ( char )
-    .word literal_impl                             # 
-    .word '0'                                      # ( char numChar )
-char_valid_start:
-    # compare i and stack top
-    .word dup2_impl                                # ( char numChar char numChar )
-    .word forth_minus_impl                         # ( char numChar char-numChar )
-1:  .word branchIfZero_impl                        # ( char numChar )
-    CalcBranchForwardToLabel return_char_valid     #
-    .word literal_impl                             #
-    .word 1                                        # ( char numChar 1 )
-    .word forth_add_impl                           # ( char numChar+1 )
-    .word dup_impl                                 # ( char numChar numChar )
-    .word literal_impl                             #
-    .word ':'                                      # ( char numChar numChar endChar )
-    .word forth_minus_impl                         # ( char numChar numChar-endChar )
-1:  .word branchIfZero_impl                        # ( char numChar )
-    CalcBranchForwardToLabel return_char_not_valid #
-1:  .word branch_impl                              # ( char numChar )
-    CalcBranchBackToLabel char_valid_start         #
-return_char_valid:                                 # ( char numChar )
-    .word drop_impl                                # ( char )
-    .word drop_impl                                # (  )
-    .word literal_impl                             # 
-    .word 1                                        # ( 1 )
-    .word return_impl                              #
-return_char_not_valid:                             #
-    .word drop_impl                                # ( char )
-    .word drop_impl                                # (  )
-    .word literal_impl                             # 
-    .word 0                                        # ( 0 )
-    .word return_impl       
-
-word_header isStringValidNumber, isStringValidNumber, 0, forth_fatoi, isCharValidNumber
-    secondary_word isStringValidNumber
-    # ( pString nStringSize -- 0ifNotValid)
-    .word push_return_impl    # ( pString )
-string_valid_start:
-    .word pop_return_impl     # ( pString nStringSize )
-    .word dup_impl            # ( pString nStringSize nStringSize )
-1:  .word branchIfZero_impl   # ( pString nStringSize )
-    CalcBranchForwardToLabel string_valid_end
-    .word push_return_impl    # ( pString )
-
-    # do stuff
-    .word dup_impl               # ( pString pString )
-    .word loadByte_impl          # ( pString char )
-    .word isCharValidNumber_impl # ( pString bValid )
-1:  .word branchIfZero_impl      # ( pString )
-    CalcBranchForwardToLabel not_valid_end 
-    .word literal_impl           #
-    .word 1                      # ( pString 1 )
-    .word forth_add_impl         # ( pString+1 )
-    .word pop_return_impl        # ( pString nStringSize )
-    .word literal_impl           #
-    .word 1                      # ( pString nStringSize 1 )
-    .word forth_minus_impl       # ( pString nStringSize-1 )
-    .word push_return_impl       # ( pString )
-1:  .word branch_impl            
-    CalcBranchBackToLabel string_valid_start
-string_valid_end:
-    .word drop_impl             # ( pString )
-    .word drop_impl             # ( )
-    .word literal_impl          #
-    .word 1                     # ( 1 )
-    .word return_impl
-not_valid_end:
-    .word pop_return_impl       # ( _ )
-    .word drop_impl             # ( )
-    .word drop_impl             # ( )
-    .word literal_impl          #
-    .word 0                     # ( 0 )
-    .word return_impl
-
-word_header forth_fatoi, "$", 0, show, isStringValidNumber
+word_header forth_fatoi, "$", 0, show, pop_return
     # ( buffer size -- num )
     PopDataStack a1
     PopDataStack a0
     call fatoi
     PushDataStack a2
     end_word
-
-
 
 word_header show, show, 0, execute, forth_fatoi
     # DATA STACK
