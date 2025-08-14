@@ -38,7 +38,6 @@
 .global setTokenLookupErrorFlag_impl
 .global getTokenLookupErrorFlag_impl
 .global unsetTokenLookupErrorFlag_impl
-.global print_impl
 .global isCharValidNumber_impl
 .global isStringValidNumber_impl
 .global forth_fatoi_impl
@@ -298,7 +297,7 @@ word_header drop, drop, 0, dup2, swap
     PopDataStack t1
     end_word
     
-word_header dup2, "2dup", 0, findXT, drop
+word_header dup2, 2dup, 0, findXT, drop
     PopDataStack t1
     PopDataStack t2
     PushDataStack t2
@@ -436,40 +435,12 @@ word_header push_return, ">R", 0, pop_return, rot
     PushReturnStack t1
     end_word
 
-word_header pop_return, "<R", 0, print, push_return
+word_header pop_return, "<R", 0, isCharValidNumber, push_return
     PopReturnStack t1
     PushDataStack t1
     end_word
 
-word_header print, print, 0, isCharValidNumber, pop_return
-    secondary_word print
-    # ( pString nStringSize -- )
-    .word push_return_impl    # ( pString )
-print_start:
-    .word pop_return_impl     # ( pString nStringSize )
-    .word dup_impl            # ( pString nStringSize nStringSize )
-1:  .word branchIfZero_impl   # ( pString nStringSize )
-    CalcBranchForwardToLabel printLoopEnd
-    .word push_return_impl    # ( pString )
-    .word dup_impl            # ( pString pString )
-    .word loadByte_impl       # ( pString char )
-    .word emit_impl           # ( pString )
-    .word literal_impl
-    .word 1                   # ( pString 1 )
-    .word forth_add_impl      # ( pString+1 )
-    .word pop_return_impl     # ( pString+1 nStringSize )
-    .word literal_impl
-    .word 1                   # ( pString+1 nStringSize 1 )
-    .word forth_minus_impl    # ( pString+1 nStringSize-1 )
-    .word push_return_impl    # ( pString+1 )
-1:  .word branch_impl
-    CalcBranchBackToLabel print_start
-printLoopEnd:
-    .word drop_impl
-    .word drop_impl
-    .word return_impl
-    
-word_header isCharValidNumber, isCharValidNumber, 0, isStringValidNumber, print
+word_header isCharValidNumber, isCharValidNumber, 0, isStringValidNumber, pop_return
     # ( char -- 0IfNotValid )
     secondary_word isCharValidNumber
     .word literal_impl                             # ( char numChar )

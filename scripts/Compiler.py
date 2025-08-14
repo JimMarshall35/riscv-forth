@@ -31,9 +31,10 @@ literal_word_name = "literal_impl"
 add_word_name = "forth_add_impl"
 
 return_token_name = "return_impl"
-twodup_word_name = "2dup"
+twodup_word_name = "dup2_impl"
 minus_word_name = "forth_minus_impl"
-equals_word_name = minus_word_name
+equals_word_name = "equals_impl"
+not_equals_word_name = "notEquals_impl"
 drop_word_name = "drop_impl"
 end_primitive_macro_name = "end_word"
 

@@ -24,6 +24,13 @@ string UnknownTokenStartStr_ "unknowntoken:'" ( TODO: needs compiler change to a
 
 string UnknownTokenEndStr_ "'\n"
 
+: i ( -- i ) -2 R[] @ ;
+
+: print ( pString nStringSize -- )
+    0 do
+        dup i + c@ emit
+    loop
+;
 
 : setHeaderImmediate ( bImm pHeader -- ) OFFSET_IMM + ! ;
 
@@ -167,3 +174,4 @@ string UnknownTokenEndStr_ "'\n"
         then
     0 until 
 ;
+

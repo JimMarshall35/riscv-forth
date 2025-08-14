@@ -1,0 +1,1 @@
+python scripts/Compiler.py src/forth/system.forth -a src/asm/vm.s -o src/asm/system.s
