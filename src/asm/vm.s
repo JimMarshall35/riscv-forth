@@ -306,7 +306,7 @@ word_header dup2, 2dup, 0, findXT, drop
     PushDataStack t1
     end_word
     
-word_header findXT, findXT, 0, flags, dup2
+word_header findXT, findXT, 0, forth_and, dup2
     PopDataStack t5   # t5 == string ptr
     PopDataStack t6   # t6 == string length
     
@@ -341,85 +341,31 @@ word_header findXT, findXT, 0, flags, dup2
     addi t4, t4, HEADER_SIZE
     PushDataStack t4
     end_word          
-
-word_header flags, flags, 0, setCompile, findXT
-    la t1, flags_data
-    PushDataStack t1
-    end_word
-flags_data:
-    .word 0
     
-word_header setCompile, ], 0, setInterpret, flags
-    secondary_word setCompile
-    .word flags_impl      # ( &flags )
-    .word loadCell_impl   # ( flags )
-    .word literal_impl
-    .word COMPILE_BIT     # ( flags COMPILE_BIT )
-    .word forth_or_impl   # ( flags|COMPILE_BIT )
-    .word flags_impl      # ( flags|COMPILE_BIT &flags )
-    .word store_impl      # ( )
-    .word return_impl
-
-word_header setInterpret, [, 0, forth_and, setCompile
-    secondary_word setInterpret
-    .word flags_impl      # ( &flags )
-    .word loadCell_impl   # ( flags )
-    .word literal_impl
-    .word COMPILE_BIT     # ( flags COMPILE_BIT )
-    .word literal_impl    # ( flags COMPILE_BIT -1 )
-    .word -1
-    .word forth_xor_impl  # ( flags ~COMPILE_BIT )
-    .word forth_and_impl  # ( flags&~COMPILE_BIT )
-    .word flags_impl      # ( flags&~COMPILE_BIT &flags )
-    .word store_impl      # ( )
-    .word return_impl
-
-word_header forth_and, "and", 0, forth_or, setInterpret
+word_header forth_and, "and", 0, forth_or, findXT
     PopDataStack t2
     PopDataStack t3
     and t2, t2, t3
     PushDataStack t2
     end_word
 
-word_header forth_or, "or", 0, get_compile_bit, forth_and
+word_header forth_or, "or", 0, forth_xor, forth_and
     PopDataStack t2
     PopDataStack t3
     or t2, t2, t3
     PushDataStack t2
     end_word
 
-word_header get_compile_bit, get_compile_bit, 0, forth_xor, forth_or
-    secondary_word get_compile_bit
-    .word flags_impl        # ( &flags )
-    .word loadCell_impl     # ( flags )
-    .word literal_impl      # 
-    .word COMPILE_BIT       # ( flags COMPILE_BIT )
-    .word forth_and_impl    # ( flags&COMPILE_BIT )
-    .word return_impl
-
-word_header forth_xor, "xor", 0, get_comment_bit, get_compile_bit
+word_header forth_xor, "xor", 0, here, forth_or
     PopDataStack t2
     PopDataStack t3
     xor t2, t2, t3
     PushDataStack t2
     end_word
     
-word_header get_comment_bit, get_comment_bit, 0, comment_on, forth_xor
-    secondary_word get_comment_bit
-    .word return_impl
-
-word_header comment_on, "(", 0, comment_off, get_comment_bit
-    secondary_word comment_on
-    .word return_impl
-
-word_header comment_off, ")", 0, here, comment_on
-    secondary_word comment_off
-    .word return_impl
-
-word_header here, here, 0, rot, comment_off
+word_header here, here, 0, rot, forth_xor
     PushDataStack s5
     end_word
-
 
 word_header rot, rot, 0, push_return, here
     PopDataStack t1
@@ -568,7 +514,7 @@ word_header setHere, setHere, 0, return_stack_index, showR
     PopDataStack s5
     end_word
 
-word_header return_stack_index, R[], 0, getHeaderNext, setHere
+word_header return_stack_index, R[], 0, getDictionaryEnd, setHere
     PopDataStack t3
     bgt t3, zero, invalid_rstack_index
     mv t0, s3 # s3 - return stack base pointer
@@ -590,72 +536,21 @@ invalid_rstack_index:
     end_word
 
 
-word_header getHeaderNext, getHeaderNext, 0, getHeaderPrev, return_stack_index
-    secondary_word getHeaderNext
-    # ( pHeader -- pHeader->pNext )
-    .word literal_impl
-    .word OFFSET_NEXT      # ( pHeader OFFSET_NEXT )
-    .word forth_add_impl   # ( pHeader+OFFSET_NEXT )
-    .word loadCell_impl    # ( pHeader->pNext )
-    .word return_impl
-
-word_header getHeaderPrev, getHeaderPrev, 0, setHeaderPrev, getHeaderNext
-    secondary_word getHeaderPrev
-    # ( pHeader -- pHeader->pPrev )
-    .word literal_impl
-    .word OFFSET_PREV      # ( pHeader OFFSET_PREV )
-    .word forth_add_impl   # ( pHeader+OFFSET_PREV )
-    .word loadCell_impl    # ( pHeader->pPrev )
-    .word return_impl
-
-
-word_header setHeaderPrev, setHeaderPrev, 0, setHeaderNext, getHeaderPrev
-    secondary_word setHeaderPrev
-    # ( pPrev pHeader -- )
-    .word literal_impl
-    .word OFFSET_PREV      # ( pPrev pHeader OFFSET_PREV )
-    .word forth_add_impl   # ( pPrev pHeader+OFFSET_PREV )
-    .word store_impl       # ( )
-    .word return_impl
-
-word_header setHeaderNext, setHeaderNext, 0, getDictionaryEnd, setHeaderPrev
-    secondary_word setHeaderNext
-    # ( pNext pHeader -- )
-    .word literal_impl
-    .word OFFSET_NEXT      # ( pNext pHeader OFFSET_PREV )
-    .word forth_add_impl   # ( pNext pHeader+OFFSET_PREV )
-    .word store_impl       # ( )
-    .word return_impl
-
-word_header getDictionaryEnd, getDictionaryEnd, 0, setDictionaryEnd, setHeaderNext
-    secondary_word getDictionaryEnd
+word_header getDictionaryEnd, getDictionaryEnd, 0, setDictionaryEnd, return_stack_index
     # ( -- pDictEnd )
-    .word literal_impl         # 
-    .word vm_p_dictionary_end  # ( &pDictEnd )
-    .word loadCell_impl        # ( pDictEnd )
-    .word return_impl
+    la t1, vm_p_dictionary_end
+    lw t1, 0(t1)
+    PushDataStack t1
+    end_word
 
-word_header setDictionaryEnd, setDictionaryEnd, 0, tokenBufferToHeaderCode, getDictionaryEnd
-    secondary_word setDictionaryEnd
+word_header setDictionaryEnd, setDictionaryEnd, 0, toCString, getDictionaryEnd
     # ( pDictEndNew -- )
-    .word literal_impl         # 
-    .word vm_p_dictionary_end  # ( pDictEndNew &pDictEnd )
-    .word store_impl           # ( )
-    .word return_impl
+    PopDataStack t1
+    la t0, vm_p_dictionary_end
+    sw t1, 0(t0)
+    end_word
 
-word_header tokenBufferToHeaderCode, tokenBufferToHeaderCode, 0, toCString, setDictionaryEnd
-    secondary_word tokenBufferToHeaderCode
-                                   # ( outBuf )
-    .word tokenBufferSize_impl     # ( outBuf &tokenBufferSize )
-    .word loadCell_impl            # ( outBuf tokenBufferSize )
-    .word swap_impl                # ( tokenBufferSize outBuf )
-    .word tokenBuffer_impl         # ( tokenBufferSize outBuf tokenBuffer )
-    .word swap_impl                # ( tokenBufferSize tokenBuffer outBuf )
-    .word toCString_impl           # ( )
-    .word return_impl
-
-
-word_header toCString, toCString, 0, beginSecondaryWord, tokenBufferToHeaderCode
+word_header toCString, toCString, 0, setNumInputHex, setDictionaryEnd
     # ( inStringLen inString outCString -- )
     PopDataStack a0
     PopDataStack a1
@@ -663,48 +558,7 @@ word_header toCString, toCString, 0, beginSecondaryWord, tokenBufferToHeaderCode
     call forth_string_to_c
     end_word
 
-word_header beginSecondaryWord, bw, 0, compileWord, toCString
-    # ( -- pNewWordHeader )
-    secondary_word beginSecondaryWord
-    #.word create_header_impl      # ( pHeader )
-    .word setCompile_impl      
-    .word literal_impl
-    .word 0x014982b3
-    .word compileWord_impl
-    .word literal_impl
-    .word 0x0082a023
-    .word compileWord_impl
-    .word literal_impl
-    .word 0x004a0a13
-    .word compileWord_impl
-    .word literal_impl
-    .word 0x00000417
-    .word compileWord_impl
-    .word literal_impl
-    .word 0x00040413
-    .word compileWord_impl
-    .word literal_impl
-    .word 0x00042283
-    .word compileWord_impl
-    .word literal_impl
-    .word 0x000280e7b
-    .word compileWord_impl
-    .word return_impl
-
-word_header compileWord, cw, 0, setNumInputHex, beginSecondaryWord
-    # ( word -- )
-    secondary_word compileWord
-    .word here_impl      # ( word here )
-    .word store_impl     # ( )
-    .word here_impl      # ( here )
-    .word literal_impl   #
-    .word CELL_SIZE      # ( here CELL_SIZE )
-    .word forth_add_impl # ( here+CELL_SIZE )
-    .word setHere_impl   # ()
-    .word return_impl
-
-
-word_header setNumInputHex, ioHex, 0, setNumInputDec, compileWord
+word_header setNumInputHex, ioHex, 0, setNumInputDec, toCString
     la t1, vm_flags
     lw t0, 0(t1)
     ori t0, t0, NUM_IO_HEX_BIT

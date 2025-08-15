@@ -384,6 +384,9 @@ def do_string(prg, tokenItr, currentToken):
     prg.append_line_to_current(f"    .ascii {defVal}")
     prg.append_line_to_current( "    .align 4")
 
+def do_immediate(prg, tokenItr, currentToken):
+    prg.compiledWords[-1].immediate = True
+
 pseudo_tokens = {
     "if" : do_if,
     "then" : do_then,
@@ -397,7 +400,8 @@ pseudo_tokens = {
     ";" : do_semicolon,
     ":" : do_colon,
     "#define" : do_define,
-    "string" : do_string
+    "string" : do_string,
+    "immediate" : do_immediate
 }
 def do_cmd_args():
     parser = argparse.ArgumentParser(
@@ -459,6 +463,18 @@ def compile_literal(prg, literalVal):
     prg.append_line_to_current(f"    .word {literal_word_name}")
     prg.append_line_to_current(f"    .word {literalVal}")
 
+def is_valid_number(string):
+    if string.isnumeric():
+        return True
+    if string[0] == '-' and string[1:].isnumeric():
+        return True
+    try:
+        int(string, 16)
+        return True
+    except ValueError:
+        return False
+
+
 def main():
     args = do_cmd_args()
     try_load_asm_file(args)
@@ -479,7 +495,7 @@ def main():
             pseudo_tokens[token.string](prg, tokenItr, token)
         elif token.string in word_name_map:
             do_found_word(prg, token)
-        elif token.string.isnumeric() or (token.string[0] == '-' and token.string[1:].isnumeric()):
+        elif is_valid_number(token.string):
             compile_literal(prg, token.string)
         else:
             do_unfound_word(prg, token)

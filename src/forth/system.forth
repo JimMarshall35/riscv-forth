@@ -6,12 +6,17 @@
 #define MINUS_CHAR 45
 
 #define HEADER_SIZE 44
-#define OFFSET_IMM 36
+#define OFFSET_IMM 40
+#define OFFSET_NEXT 32
+#define OFFSET_PREV 36
+
 #define CELL_SIZE 4
 
 #define ASCII_NUM_RANGE_START 48
 
 #define ASCII_NUM_RANGE_END 57
+
+#define COMPILE_BIT 1
 
 buf LineBuffer_ 128
 var LineBufferSize_ 0
@@ -23,11 +28,23 @@ var LineBufferI_ 0
 
 var EvalErrorFlag_ 0
 
+var flags 0
+
 string LiteralStr_ "literal"
+
+string ReturnStr_ "return"
 
 string UnknownTokenStartStr_ "unknowntoken:'" ( TODO: needs compiler change to allow spaces within strings but not high priority )
 
 string UnknownTokenEndStr_ "'\n"
+
+( flags )
+
+: setCompile ( -- ) flags @ COMPILE_BIT or flags ! ;
+
+: setInterpret ( -- ) flags @ COMPILE_BIT -1 xor and flags ! ;
+
+: get_compile_bit ( -- 1or0 ) flags @ COMPILE_BIT and 0 > if 1 r then 0 ;
 
 ( loop counter functions )
 
@@ -115,6 +132,14 @@ string UnknownTokenEndStr_ "'\n"
     1
 ;
 
+: getHeaderNext ( pHeader -- pHeader->pNext ) OFFSET_NEXT + @ ; 
+
+: getHeaderPrev ( pHeader -- pHeader->pPrev ) OFFSET_PREV + @ ; 
+
+: setHeaderPrev ( pPrev pHeader -- ) OFFSET_PREV + ! ; 
+
+: setHeaderNext ( pNext pHeader -- ) OFFSET_NEXT + ! ; 
+
 : setHeaderImmediate ( bImm pHeader -- ) OFFSET_IMM + ! ;
 
 : getHeaderImmediate ( pHeader -- pHeader->bImmediate ) OFFSET_IMM + @ ; 
@@ -123,6 +148,9 @@ string UnknownTokenEndStr_ "'\n"
 
 : getXTImmediate ( xt -- 0IfNotImmediate ) getXTHeader getHeaderImmediate ;
 
+: tokenBufferToHeaderCode ( buffer -- ) TokenBufferSize_ @ swap Tokenbuffer_ swap toCString ;
+
+: cw ( word2compile -- ) here ! here CELL_SIZE + setHere ;
 
 : doToken  
     TokenBufferSize_ @ Tokenbuffer_ findXT
@@ -130,7 +158,11 @@ string UnknownTokenEndStr_ "'\n"
     dup 0 != if
         ( we've found a valid xt )
         get_compile_bit 0 != if
-            cw
+            dup getXTImmediate if 
+                execute
+            else
+                cw
+            then
         else
             execute
         then
@@ -256,4 +288,32 @@ string UnknownTokenEndStr_ "'\n"
         then
     0 until 
 ;
+
+: compileHeader ( -- pHeader )
+    loadNextToken drop
+    here here HEADER_SIZE + setHere
+    ( pHeader )
+    dup tokenBufferToHeaderCode
+    dup getDictionaryEnd swap setHeaderPrev
+    dup getDictionaryEnd setHeaderNext
+    dup 0 swap setHeaderNext
+;
+
+: bw ( pHeader )
+    setCompile
+    compileHeader
+    0x014982b3 cw
+    0x0082a023 cw 
+    0x004a0a13 cw   
+    0x00000417 cw     
+    0x00040413 cw
+    0x00042283 cw 
+    0x000280e7 cw 
+;
+
+: ew ( pHeader -- )
+    ReturnStr_ findXT cw
+    setInterpret
+    setDictionaryEnd
+; immediate 
 
