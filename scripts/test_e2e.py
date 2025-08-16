@@ -12,7 +12,7 @@ def test_run():
 
     
     try:
-        proc.expect("Risc V Forth", timeout=10)
+        proc.expect("Risc IV Forth", timeout=10)
     except pexpect.TIMEOUT:
         print("Timeout waiting for 'Risc V Forth' prompt.")
         assert False, "QEMU did not output expected prompt"
