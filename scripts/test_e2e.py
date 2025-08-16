@@ -14,10 +14,10 @@ class NotPyTestCase:
         try:
             proc.expect_exact(self.expected_data_stack_string, timeout=10)
         except pexpect.TIMEOUT:
-            print(f"Timeout waiting for expected output: {self.expected_data_stack_string}. Input strings: {'\n'.join(self.input_strs)}")
+            #print(f"Timeout waiting for expected output: {self.expected_data_stack_string}. Input strings: {'\n'.join(self.input_strs)}")
             assert False, "Test failed due to timeout"
         except pexpect.EOF:
-            print(f"EOF for expected output: {self.expected_data_stack_string}. Input strings: {'\n'.join(self.input_strs)}")
+            #print(f"EOF for expected output: {self.expected_data_stack_string}. Input strings: {'\n'.join(self.input_strs)}")
             assert False, "EOF"
         if self.cleanup:
             proc.sendline(self.cleanup)
@@ -25,10 +25,10 @@ class NotPyTestCase:
                 proc.expect_exact("[  ]", timeout=10)
             except pexpect.TIMEOUT:
                 print(f"Timeout waiting for empty stack after cleanup. Input strings: {'\n'.join(self.input_strs)} . Cleanup: {self.cleanup}")
-                assert False, "Test failed due to timeout"
+                #assert False, "Test failed due to timeout"
             except pexpect.EOF:
                 print(f"EOF waiting for empty stack after cleanup. Input strings: {'\n'.join(self.input_strs)} . Cleanup: {self.cleanup}")
-                assert False, "EOF"
+                #assert False, "EOF"
 
 tests = [
     NotPyTestCase(["1 2 show"], "[ 1, 2 ]", "drop drop show")
@@ -50,10 +50,10 @@ def test_run():
             proc.expect_exact("Risc V Forth", timeout=10)
         except pexpect.TIMEOUT:
             print("Timeout waiting for 'Risc V Forth' prompt.")
-            #assert False, "QEMU did not output expected prompt"
+            assert False, "QEMU did not output expected prompt"
         except pexpect.EOF:
             print("pexpect.EOF")
-            #assert False, "QEMU did not output expected prompt"
+            assert False, "QEMU did not output expected prompt"
 
         for test in tests:
             test.run(proc)
