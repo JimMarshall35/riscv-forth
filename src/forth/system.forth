@@ -190,7 +190,7 @@ string UnknownTokenEndStr_ "'\n"
 : seekTokenStart ( -- 0or1 )
     begin
         LineBuffer_ LineBufferI_ @ + c@         ( char@I )
-        SPACE_CHAR != if
+        dup SPACE_CHAR != swap NEWLINE_CHAR != logic_and if
             0 r                                ( I points to something other than a space - there's a token to load return 0 )
         then
         LineBufferI_ @ 1 + LineBufferI_ !      ( increment line buffer I )
