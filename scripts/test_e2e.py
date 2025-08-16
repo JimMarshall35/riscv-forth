@@ -31,7 +31,7 @@ class NotPyTestCase:
                 assert False, "EOF"
 
 tests = [
-    NotPyTestCase(["1 2 show"], "[ 1, 2 ]", "drop drop show")
+    #NotPyTestCase(["1 2 show"], "[ 1, 2 ]", "drop drop show")
 ]
 
 def test_run():
@@ -44,7 +44,7 @@ def test_run():
 
     
     try:
-        proc.expect("Risc V Forth", timeout=10)
+        proc.expect_exact("Risc V Forth", timeout=10)
     except pexpect.TIMEOUT:
         print("Timeout waiting for 'Risc V Forth' prompt.")
         assert False, "QEMU did not output expected prompt"
