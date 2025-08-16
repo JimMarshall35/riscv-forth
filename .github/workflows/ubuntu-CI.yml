@@ -27,3 +27,16 @@ jobs:
         path: |
           ./hello
           src/asm/system.s
+  test:
+    runs-on: ubuntu-latest
+    container: jerryzj/riscv
+    steps:
+    - uses: actions/checkout@v4
+    - name: Download a single artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: my-artifact
+    - name: Test
+      run: |
+        ls
+        qemu -h
