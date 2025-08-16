@@ -36,23 +36,26 @@ tests = [
 
 def test_run():
     proc = None
-    try:
-        proc = pexpect.spawn("qemu-system-riscv32 -nographic -serial mon:stdio -machine virt -bios hello -qmp tcp:localhost:4444,server,wait=off", timeout=10)
-    except pexpect.ExceptionPexpect as e:
-        print(f"Error starting QEMU: {e}")
-        assert False, "QEMU failed to start"
+    with open('testlog.txt','wb') as logF:
 
-    
-    try:
-        proc.expect_exact("Risc V Forth", timeout=10)
-    except pexpect.TIMEOUT:
-        print("Timeout waiting for 'Risc V Forth' prompt.")
-        assert False, "QEMU did not output expected prompt"
-    except pexpect.EOF:
-        print("pexpect.EOF")
-        assert False, "QEMU did not output expected prompt"
+        try:
+            proc = pexpect.spawn("qemu-system-riscv32 -nographic -serial mon:stdio -machine virt -bios hello -qmp tcp:localhost:4444,server,wait=off", timeout=10)
+        except pexpect.ExceptionPexpect as e:
+            print(f"Error starting QEMU: {e}")
+            assert False, "QEMU failed to start"
 
-    for test in tests:
-        test.run(proc)
+        proc.logfile = logF
+
+        try:
+            proc.expect_exact("Risc V Forth", timeout=10)
+        except pexpect.TIMEOUT:
+            print("Timeout waiting for 'Risc V Forth' prompt.")
+            assert False, "QEMU did not output expected prompt"
+        except pexpect.EOF:
+            print("pexpect.EOF")
+            assert False, "QEMU did not output expected prompt"
+
+        for test in tests:
+            test.run(proc)
 
     assert True
