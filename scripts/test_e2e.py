@@ -30,7 +30,7 @@ class TestCase:
                 assert False, "EOF"
 
 tests = [
-    TestCase(["1 2 show"], "[ 1, 2 ]", "drop drop")
+    TestCase(["1 2 show"], "[ 1, 2 ]", "drop drop show")
 ]
 
 def test_run():
