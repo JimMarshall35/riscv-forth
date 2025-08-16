@@ -31,7 +31,6 @@ jobs:
   test:
     needs: build
     runs-on: ubuntu-latest
-    container: jerryzj/riscv
     steps:
     - name: Set up QEMU
       run: |
