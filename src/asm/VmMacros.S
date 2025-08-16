@@ -31,7 +31,6 @@ div \regOut, \regSize, \regTemp
 
 
 .macro PushStack regBase, regSize, regVal
-
     add t0, \regBase, \regSize
     sw \regVal, 0(t0)
     addi \regSize, \regSize, CELL_SIZE

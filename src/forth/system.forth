@@ -32,7 +32,7 @@ var flags 0
 
 string LiteralStr_ "literal"
 
-string ReturnStr_ "return"
+string ReturnStr_ "r"
 
 string UnknownTokenStartStr_ "unknowntoken:'" ( TODO: needs compiler change to allow spaces within strings but not high priority )
 
@@ -151,6 +151,9 @@ string UnknownTokenEndStr_ "'\n"
 : tokenBufferToHeaderCode ( buffer -- ) TokenBufferSize_ @ swap Tokenbuffer_ swap toCString ;
 
 : cw ( word2compile -- ) here ! here CELL_SIZE + setHere ;
+
+( I can't call this cb because the compiler interprets that as a hex number for some reason - this is misbehavior of the compiler )
+: cbyte ( byte2compile -- ) here c! here 1 + setHere ;
 
 : doToken  
     TokenBufferSize_ @ Tokenbuffer_ findXT
@@ -299,21 +302,40 @@ string UnknownTokenEndStr_ "'\n"
     dup 0 swap setHeaderNext
 ;
 
+: alignHere ( alignment -- )
+    ( I know, you don't need a loop you can do this just as a sum, but I couldn't get to work :o )
+    begin 
+        dup here swap mod 0 = if
+            drop
+            r
+        then 
+        here 1 + setHere
+    0 until
+;
+
 : bw ( pHeader )
+    ( Implementation is for COMPRESSED INSTRUCTION FORMAT RISC-V )
+    2 alignHere
     setCompile
     compileHeader
-    0x014982b3 cw
-    0x0082a023 cw 
-    0x004a0a13 cw   
-    0x00000417 cw     
-    0x00040413 cw
-    0x00042283 cw 
-    0x000280e7 cw 
+    ( Eventually I will write an assembler library and this raw machine code         )
+    ( will be replaced with what will appear to be readable assembly code RPN style  )
+    0xB3 cbyte 0x82 cbyte 0x49 cbyte 0x01 cbyte ( add	t0,s3,s4 )
+    0x23 cbyte 0xA0 cbyte 0x82 cbyte 0x00 cbyte ( sw	s0,0[t0] )
+    0x11 cbyte 0x0A cbyte                       ( addi	s4,s4,4  )
+    0x17 cbyte 0x04 cbyte 0x00 cbyte 0x00 cbyte ( auipc	s0,0x0   )
+    0x13 cbyte 0x04 cbyte 0x04 cbyte 0x01 cbyte ( mv	s0,s0    )
+    0x83 cbyte 0x22 cbyte 0x04 cbyte 0x00 cbyte ( lw	t0,0[s0] )
+    0xE7 cbyte 0x80 cbyte 0x02 cbyte 0x00 cbyte ( jalr	t0       )
 ;
 
 : ew ( pHeader -- )
     ReturnStr_ findXT cw
     setInterpret
+    ( only set the dictionary end ptr, from where token searches start, )
+    ( after the word is compiled so that a word can be redfined and use )
+    ( its old implementation in its NEW implementation. To call itself  )
+    ( a new word needs to be rewritten, recurse.                        )
     setDictionaryEnd
 ; immediate 
 

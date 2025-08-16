@@ -3,7 +3,6 @@
 
 .global emit_impl
 .global key_impl
-.global tokenBuffer_impl
 .global loadCell_impl
 .global store_impl
 .global loadByte_impl
@@ -13,7 +12,6 @@
 .global forth_add_impl
 .global literal_impl
 .global dup_impl
-.global tokenBufferSize_impl
 .global return_impl
 .global forth_minus_impl
 .global swap_impl
@@ -35,29 +33,18 @@
 .global rot_impl
 .global push_return_impl
 .global pop_return_impl
-.global setTokenLookupErrorFlag_impl
-.global getTokenLookupErrorFlag_impl
-.global unsetTokenLookupErrorFlag_impl
-.global isCharValidNumber_impl
-.global isStringValidNumber_impl
 .global forth_fatoi_impl
 .global show_impl
 .global execute_impl
 .global showR_impl
 .global setHere_impl
 .global return_stack_index_impl
-.global getHeaderNext_impl
-.global getHeaderPrev_impl
-.global setHeaderPrev_impl
-.global setHeaderNext_impl
 .global getDictionaryEnd_impl
 .global setDictionaryEnd_impl
 .global tokenBufferToHeaderCode_impl
 .global toCString_impl
 .global compileWord_impl
 .global endWord_impl
-.global getHeaderImmediate_impl
-.global setHeaderImmediate_impl
 .global getXTHeader_impl
 .global isXTImmediate_impl
 .global setNumInputHex_impl
@@ -66,6 +53,7 @@
 .global notEquals_impl
 .global lessThan_impl
 .global greaterThan_impl
+.global modulo_impl
 
 .global last_vm_word
 
@@ -109,11 +97,6 @@ error_msg_stack_underflow: .ascii "data stack underflow\n\0"
 error_msg_return_stack_overflow:  .ascii "return stack overflow\n\0"
 error_msg_return_stack_underflow: .ascii "return stack underflow\n\0"
 
-.equ ERROR_MSG_TOKEN_LEN, 8
-.equ ERROR_MSG_NOTFOUND_LEN, 12
-error_msg_token: .ascii "token: '\0"
-error_msg_not_found: .ascii "' not found\n\0"
-
 show_data_stack_begin_str:   .ascii "data   [ \0"
 show_return_stack_begin_str: .ascii "return [ \0"
 show_comma_sep_str:          .ascii ", \0"
@@ -121,7 +104,7 @@ show_stack_end_str:          .ascii " ]\n\0"
 
 title_string: .string "Risc V Forth\n"
 
-
+.align 4
 
 .text
 
@@ -169,14 +152,6 @@ vm_run:
     la s3, vm_return_stack
     li s4, 0
 
-    la t0, tokenBufferSize_data
-    sw zero, 0(t0)
-
-    la a0, tokenBuffer_data
-    li a1, 0
-    li a2, TOKEN_BUFFER_MAX_SIZE
-    call memset
-
     la s5, _dataEnd
 
     la s0, outerInterpreter_impl
@@ -191,20 +166,13 @@ word_header_first emit,   emit,     0, key
     call putc
     end_word
 
-word_header       key,    key,      0, tokenBuffer, emit
+word_header       key,    key,      0, loadCell, emit
     li a0, UART_BASE
     call getc_block         # char in a0
     PushDataStack a0
     end_word
-
-word_header tokenBuffer, tokenbuffer, 0, loadCell, key
-    la t1, tokenBuffer_data
-    PushDataStack t1
-    end_word
-tokenBuffer_data:
-    .fill TOKEN_BUFFER_MAX_SIZE, 1, 0
                                            
-word_header loadCell, @, 0, store, tokenBuffer
+word_header loadCell, @, 0, store, key
     PopDataStack t2
     lw t3, 0(t2)
     PushDataStack t3
@@ -262,20 +230,13 @@ word_header literal, literal, 0, dup, forth_add
     PushDataStack t3
     end_word
 
-word_header dup, dup, 0, tokenBufferSize, literal
+word_header dup, dup, 0, return, literal
     PopDataStack t2
     PushDataStack t2
     PushDataStack t2
     end_word
-
-word_header tokenBufferSize, tokenBufferSize, 0, return, dup
-    la t1, tokenBufferSize_data
-    PushDataStack t1
-    end_word
-tokenBufferSize_data:
-    .word 0
     
-word_header return, "r", 0, forth_minus, tokenBufferSize
+word_header return, "r", 0, forth_minus, dup
     PopReturnStack s0
     end_word
 
@@ -454,7 +415,6 @@ word_header execute, execute, 0, showR, show
     jalr ra, t2, 0
     end_word         # should never be hit
 
-
 word_header showR, showR, 0, setHere, execute
     # RETURN STACK
     la a0, show_return_stack_begin_str
@@ -535,7 +495,6 @@ invalid_rstack_index:
     PushDataStack t3
     end_word
 
-
 word_header getDictionaryEnd, getDictionaryEnd, 0, setDictionaryEnd, return_stack_index
     # ( -- pDictEnd )
     la t1, vm_p_dictionary_end
@@ -564,7 +523,6 @@ word_header setNumInputHex, ioHex, 0, setNumInputDec, toCString
     ori t0, t0, NUM_IO_HEX_BIT
     sw t0, 0(t1)
     end_word
-
 
 word_header setNumInputDec, ioDec, 0, equals, setNumInputHex
     la t1, vm_flags
@@ -611,8 +569,7 @@ lt:
 lt_end:
     end_word
 
-last_vm_word: # IMPORTANT: KEEP THIS LABEL POINTING TO THE LAST VM WORD.
-word_header greaterThan, >, 0, first_system_word, lessThan
+word_header greaterThan, >, 0, modulo, lessThan
     PopDataStack t1
     PopDataStack t2
     bgt t2, t1, gt
@@ -624,3 +581,10 @@ gt:
 gt_end:
     end_word
 
+last_vm_word: # IMPORTANT: KEEP THIS LABEL POINTING TO THE LAST VM WORD.
+word_header modulo, mod, 0, first_system_word, greaterThan
+    PopDataStack t1
+    PopDataStack t2
+    rem t2, t2, t1
+    PushDataStack t2
+    end_word
