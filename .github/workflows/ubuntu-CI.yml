@@ -32,17 +32,22 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-    - name: Set up QEMU
+    - name: Set up Environment
       run: |
         sudo apt-get update
         sudo apt-get install -y qemu-system
         sudo apt-get install -y python3-pexpect
+        sudo apt-get install python3-pytest
     - uses: actions/checkout@v4
-    - name: Download a single artifact
+    - name: Download built image
       uses: actions/download-artifact@v4
       with:
         name: my-artifact
-    - name: Test
+    - name: Shuffle files around and test dependencies
       run: |
         ls
+        cp ./hello ./scripts
         qemu-system-riscv32 -h
+    - name: Run Tests
+      run: |
+        pytest
