@@ -31,11 +31,10 @@ class NotPyTestCase:
                 assert False, "EOF"
 
 tests = [
-    NotPyTestCase(["1 2 show"], "[ 1, 2, 3 ]", "drop drop show")
+    NotPyTestCase(["1 2 show"], "[ 5, 3 ]", "drop drop show")
 ]
 
 def test_run():
-    assert True
     proc = None
     try:
         proc = pexpect.spawn("qemu-system-riscv32 -nographic -serial mon:stdio -machine virt -bios hello -qmp tcp:localhost:4444,server,wait=off", timeout=10)
