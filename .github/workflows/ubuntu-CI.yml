@@ -22,9 +22,12 @@ jobs:
       run: |
         python3 scripts/Compiler.py src/forth/system.forth -a src/asm/vm.s -o src/asm/system.s
         make -C src/asm
+    - name: Print system.s
+      run: |
+        cat src/asm/system.s
     - uses: actions/upload-artifact@v4
       with:
-        name: my-artifact
+        name: qemu-image
         path: |
           ./hello
           src/asm/system.s
@@ -42,7 +45,7 @@ jobs:
     - name: Download built image
       uses: actions/download-artifact@v4
       with:
-        name: my-artifact
+        name: qemu-image
     - name: Test build dependencies
       run: |
         qemu-system-riscv32 -h
