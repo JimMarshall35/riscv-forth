@@ -43,11 +43,10 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: my-artifact
-    - name: Shuffle files around and test dependencies
+    - name: Test build dependencies
       run: |
-        ls
-        cp ./hello ./scripts
         qemu-system-riscv32 -h
+        pytest -h 
     - name: Run Tests
       continue-on-error: true
       run: |
