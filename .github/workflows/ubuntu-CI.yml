@@ -53,6 +53,9 @@ jobs:
       run: |
         pytest
         ls
+    - name: Print Test Log
+      run: |
+        cat ./testlog.txt
     - uses: actions/upload-artifact@v4
       with:
         name: testlog
