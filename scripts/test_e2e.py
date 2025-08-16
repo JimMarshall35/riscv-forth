@@ -12,7 +12,7 @@ class NotPyTestCase:
         for input_str in self.input_strs:
             proc.sendline(input_str)
         try:
-            proc.expect(self.expected_data_stack_string, timeout=10)
+            proc.expect_exact(self.expected_data_stack_string, timeout=10)
         except pexpect.TIMEOUT:
             print(f"Timeout waiting for expected output: {self.expected_data_stack_string}. Input strings: {'\n'.join(self.input_strs)}")
             assert False, "Test failed due to timeout"
@@ -22,7 +22,7 @@ class NotPyTestCase:
         if self.cleanup:
             proc.sendline(self.cleanup)
             try:
-                proc.expect("[  ]", timeout=10)
+                proc.expect_exact("[  ]", timeout=10)
             except pexpect.TIMEOUT:
                 print(f"Timeout waiting for empty stack after cleanup. Input strings: {'\n'.join(self.input_strs)} . Cleanup: {self.cleanup}")
                 assert False, "Test failed due to timeout"
