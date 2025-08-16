@@ -1,7 +1,14 @@
 import pexpect
 # This script is used to run end-to-end tests for the RISC-V Forth system.
+# It is run as one long "soak test" where we have a dialog with the forth running in QEMU.
+# The tests are designed to be run in GitHub Actions.
 # It uses pexpect to interact with a QEMU instance running the Forth system.
-# The pexepect library does NOT work properly on windows
+# The pexepect library does NOT work properly on windows so don't expect this to work on windows.
+# The tests work on the principle of matching strings. Each test should call show at the end to
+# display the data stack. Each test case has to reset the stack after it is run, and needs
+# to call show at the end to prove to the test framework that the stack is in the expected state.
+# If you change the way the stack is displayed you'll need to change this.
+# If one test fails the rest won't be run.
 
 # renamed to stop pytest thinking this is a test class
 class NotPyTestCase:
@@ -38,7 +45,10 @@ tests = [
     # Windows terminal outputs \r\n and this code was developed on Windows, 
     # but the CI runs on Linux, so we need to add \r
     NotPyTestCase(["1 2 show\r"], "[ 1, 2 ]", "drop drop show\r"),
-    NotPyTestCase(["1 2 + show\r"], "[ 3 ]", "drop show\r")
+    NotPyTestCase(["1 2 + show\r"], "[ 3 ]", "drop show\r"),
+    NotPyTestCase(["4 6 - show\r"], "[ -2 ]", "drop show\r"),
+    NotPyTestCase(["bw jim 1 2 3 4 5 ew\r", "jim show\r"], "[ 1, 2, 3, 4, 5 ]", "drop drop drop drop drop show\r"),
+    NotPyTestCase(["bw jim2 6 7 8 ew\r", "jim2 show\r"], "[ 1, 2, 3, 4, 5, 6, 7, 8 ]", "drop drop drop drop drop drop drop drop show\r"),
 ]
 
 def test_run():
