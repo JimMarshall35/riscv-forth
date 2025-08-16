@@ -1,6 +1,7 @@
 import pexpect
 
-class TestCase:
+# renamed to stop pytest thinking this is a test class
+class NotPyTestCase:
     def __init__(self, input_strs, expected_data_stack, cleanup):
         self.input_strs = input_strs
         self.expected_data_stack_string = expected_data_stack
@@ -30,7 +31,7 @@ class TestCase:
                 assert False, "EOF"
 
 tests = [
-    TestCase(["1 2 show"], "[ 1, 2 ]", "drop drop show")
+    NotPyTestCase(["1 2 show"], "[ 1, 2 ]", "drop drop show")
 ]
 
 def test_run():
