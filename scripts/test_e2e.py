@@ -31,7 +31,7 @@ class NotPyTestCase:
                 assert False, "EOF"
 
 tests = [
-    #NotPyTestCase(["1 2 show"], "[ 1, 2 ]", "drop drop show")
+    NotPyTestCase(["1 2 show"], "[ 1, 2 ]", "drop drop show")
 ]
 
 def test_run():
