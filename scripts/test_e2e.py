@@ -1,4 +1,7 @@
 import pexpect
+# This script is used to run end-to-end tests for the RISC-V Forth system.
+# It uses pexpect to interact with a QEMU instance running the Forth system.
+# The pexepect library does NOT work properly on windows
 
 # renamed to stop pytest thinking this is a test class
 class NotPyTestCase:
@@ -31,7 +34,11 @@ class NotPyTestCase:
                 assert False, "EOF"
 
 tests = [
-    NotPyTestCase(["1 2 show\r"], "[ 1, 2 ]", "drop drop show\r")
+    # the forth code checks for a carriage return to process the input line.
+    # Windows terminal outputs \r\n and this code was developed on Windows, 
+    # but the CI runs on Linux, so we need to add \r
+    NotPyTestCase(["1 2 show\r"], "[ 1, 2 ]", "drop drop show\r"),
+    NotPyTestCase(["1 2 + show\r"], "[ 3 ]", "drop show\r")
 ]
 
 def test_run():
