@@ -51,8 +51,9 @@ jobs:
     - name: Run Tests
       run: |
         pytest
+        ls
     - uses: actions/upload-artifact@v4
       with:
         name: testlog
         path: |
-          ./scripts/testlog.txt
+          ./testlog.txt
