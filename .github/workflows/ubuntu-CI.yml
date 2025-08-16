@@ -12,6 +12,7 @@ env:
 
 jobs:
   build:
+    name: build
     runs-on: ubuntu-latest
     container: jerryzj/riscv
     steps:
@@ -28,6 +29,7 @@ jobs:
           ./hello
           src/asm/system.s
   test:
+    needs: build
     runs-on: ubuntu-latest
     container: jerryzj/riscv
     steps:
@@ -39,4 +41,4 @@ jobs:
     - name: Test
       run: |
         ls
-        qemu -h
+        qemu-system-riscv32 -h
