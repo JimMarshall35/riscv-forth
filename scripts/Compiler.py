@@ -1,7 +1,7 @@
 import argparse
 import sys
 
-from AssemblySrcParser import parse_lines
+from AssemblySrcParser import parse_lines, WordHeader
 from LinkNewWord import add_new_word
 from enum import Enum
 
@@ -57,6 +57,35 @@ control_flow_type_names = {
     ControlFlowType.Loop : "loop"
 }
 
+def unescape_gas_macro_arg(s):
+    ns = ""
+    itr = iter(s)
+    for c in itr:
+        if c == '!':
+            c = next(itr)
+        ns += c
+    print(f"UNESCAPED: {ns}")
+    return ns
+
+def escape_for_gas_macro_arg(s):
+    ns = ""
+    for c in s:
+        if c == '!':
+            ns += '!!'
+        elif c == '<':
+            ns += '!<'
+        elif c == '>':
+            ns += '!>'
+        elif c == ':':
+            ns += '!:'
+        elif c == ',':
+            ns += '!,'
+        elif c == ';':
+            ns += '!;'
+        else:
+            ns += c
+    return ns
+
 class CompiledLine:
     def back_patch(self, label):
         if unset_label_phrase in self.txt:
@@ -65,10 +94,21 @@ class CompiledLine:
         return False
     def get_string(self):
         return self.txt
+    def replace(self, oldphrase, newphrase):
+        self.txt = self.txt.replace(oldphrase, newphrase)
     def __init__(self, txt):
         self.txt = txt
 
 class CompiledWord:
+    def set_assembler_label(self, label):
+        self.assemblerLabelName = label
+        global word_name_map
+        if self.code not in word_name_map:
+            header = WordHeader()
+            header.name = self.assemblerLabelName
+            word_name_map[self.code] = header
+        for l in self.body:
+            l.replace(self.code, self.assemblerLabelName) # fix any labels that will have used the code 
     def get_lines(self):
         lines = []
         def nextword_str(nextword):
@@ -78,15 +118,13 @@ class CompiledWord:
                 return "0"
         if self.bAsmWord:
             # add header macros
-            lines.append(f"word_header {self.code}, {self.code}, {self.immediate_str()}, {nextword_str(self.nextWord)}, {self.prevWord}")
+            lines.append(f"word_header {self.get_label()}, \"{escape_for_gas_macro_arg(self.code)}\", {self.immediate_str()}, {nextword_str(self.nextWord)}, {self.prevWord}")
             # add word body
             lines += [x.txt for x in self.body]
-            # add return
-            #lines.append(f"    {end_primitive_macro_name}")
         else:
             # add header macros
-            lines.append(f"word_header {self.code}, {self.code}, {self.immediate_str()}, {nextword_str(self.nextWord)}, {self.prevWord}")
-            lines.append(f"    secondary_word {self.code}")
+            lines.append(f"word_header {self.assemblerLabelName if self.assemblerLabelName != "" else self.code}, \"{escape_for_gas_macro_arg(self.code)}\", {self.immediate_str()}, {nextword_str(self.nextWord)}, {self.prevWord}")
+            lines.append(f"    secondary_word {self.get_label()}")
             # add word body
             lines += [x.txt for x in self.body]
             # add return
@@ -97,22 +135,31 @@ class CompiledWord:
         self.body.append(line)
     def get_control_flow_label(self, controlFlowType, extraText=""):
         typeString = control_flow_type_names[controlFlowType]
-        s = f"{self.code}_{typeString}_{self.labelCounter}_{extraText}:"
+        s = f"{self.get_label()}_{typeString}_{self.labelCounter}_{extraText}:"
         self.labelCounter += 1
         return s
     def set_next(self, nextWord):
-        self.nextWord = nextWord.code
+        self.nextWord = escape_for_gas_macro_arg(nextWord.get_label())
     def set_prev(self, prevWord):
-        self.prevWord = prevWord.code
+        self.prevWord = escape_for_gas_macro_arg(prevWord.get_label())
     def immediate_str(self):
         if self.immediate:
             return "1"
         else:
             return "0"
+    def get_label(self):
+        return self.assemblerLabelName if self.assemblerLabelName != "" else self.code
     def __init__(self, code):
         self.nextWord = ""
         self.prevWord = ""
         self.code = code
+
+        # Some characters are just too "real" for the assembler to include in labels such as ':', ',', '=' and many more.
+        # Some words street names contain such characters and so they need a government name
+        # that conforms to the rules society places on them: self.assemblerLabelName.
+        # But when the outer intepreter is fired up and the threads are threadin' we don't care about such "labels"
+        self.assemblerLabelName = "" 
+        
         self.immediate = False
         self.body = []
         self.labelCounter = 0
@@ -166,12 +213,13 @@ class Program:
         if len(self.compiledWords) > 0:
             self.compiledWords[0].prevWord = "last_vm_word" # vm must export a label called "last_vm_word" that points to the last word in that file
     def get_globals_for_word(self):
-        g = [f".global {w.code}_impl" for w in self.compiledWords]
+        g = [f".global {w.assemblerLabelName if w.assemblerLabelName != "" else w.code}_impl" for w in self.compiledWords]
         g.append(".global first_system_word")
         return g
     def get_preamble_lines(self):
         return [
             ".include \"VmMacros.S\"",
+            ".altmacro",
             ".text",
             "first_system_word:",
             "\n"
@@ -205,6 +253,9 @@ class Program:
         for w in self.warnings:
             print(w)
             print()
+    def set_current_word_assembler_label(self, label):
+        assert len(self.compiledWords) > 0
+        self.compiledWords[-1].set_assembler_label(label)
     def __init__(self):
         self.errors = []
         self.warnings = []
@@ -387,6 +438,10 @@ def do_string(prg, tokenItr, currentToken):
 def do_immediate(prg, tokenItr, currentToken):
     prg.compiledWords[-1].immediate = True
 
+def do_asm_name(prg, tokenItr, currentToken):
+    name = next(tokenItr).string
+    prg.set_current_word_assembler_label(name)
+
 pseudo_tokens = {
     "if" : do_if,
     "then" : do_then,
@@ -401,7 +456,8 @@ pseudo_tokens = {
     ":" : do_colon,
     "#define" : do_define,
     "string" : do_string,
-    "immediate" : do_immediate
+    "immediate" : do_immediate,
+    "asm_name" : do_asm_name
 }
 def do_cmd_args():
     parser = argparse.ArgumentParser(
@@ -455,8 +511,8 @@ def try_load_asm_file(args):
 def build_word_name_map(headers):
     for h in headers:
         if h not in word_name_map:
-            if (h.code[0] == '(' and h.code[-1] == ')') or (h.code[0] == '[' and h.code[-1] == ']') or (h.code[0] == '\"' and h.code[-1] == '\"'):
-                h.code = h.code[1:-1]
+            if (h.code[0] == '<' and h.code[-1] == '>') or (h.code[0] == '(' and h.code[-1] == ')') or (h.code[0] == '[' and h.code[-1] == ']') or (h.code[0] == '\"' and h.code[-1] == '\"') or (h.code[0] == '\'' and h.code[-1] == '\''):
+                h.code = unescape_gas_macro_arg(h.code[1:-1])
             word_name_map[h.code] = h
 
 def compile_literal(prg, literalVal):

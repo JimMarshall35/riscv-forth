@@ -176,7 +176,7 @@ class WordHeader:
         errors = '\n'.join(self.errors) + '\n'
         print(f"Word name: '{self.name}' errors: \n{errors}")
 
-    def __init__(self, line_str, line_num):
+    def __init__(self, line_str="", line_num=-1):
         self.line_str = line_str
         self.b_is_valid = False
         self.type = HeaderType.Undefined

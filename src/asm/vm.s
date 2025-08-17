@@ -1,5 +1,11 @@
 .include "defines.s"
 .include "VmMacros.S"
+.altmacro
+#
+#   Prefix any character with ! to use it literally in a macro.
+#   We will use "<>" to denote strings in macro arguments.
+#   https://sourceware.org/binutils/docs/as/Altmacro.html
+# 
 
 .global emit_impl
 .global key_impl
@@ -160,43 +166,43 @@ vm_run:
     RestoreReturnAddress
     ret
 
-word_header_first emit,   emit,     0, key
+word_header_first emit,   "emit",     0, key
     PopDataStack a0
     li a1, UART_BASE
     call putc
     end_word
 
-word_header       key,    key,      0, loadCell, emit
+word_header       key,    "key",      0, loadCell, emit
     li a0, UART_BASE
     call getc_block         # char in a0
     PushDataStack a0
     end_word
                                            
-word_header loadCell, @, 0, store, key
+word_header loadCell, "@", 0, store, key
     PopDataStack t2
     lw t3, 0(t2)
     PushDataStack t3
     end_word
 
-word_header store, !, 0, loadByte, loadCell
+word_header store, "!!", 0, loadByte, loadCell
     PopDataStack t2
     PopDataStack t3
     sw t3, 0(t2)
     end_word
     
-word_header loadByte, c@, 0, storeByte, store
+word_header loadByte, "c@", 0, storeByte, store
     PopDataStack t2
     lb t3, 0(t2)
     PushDataStack t3
     end_word
 
-word_header storeByte, c!, 0, branchIfZero, loadByte
+word_header storeByte, "c!!", 0, branchIfZero, loadByte
     PopDataStack t2
     PopDataStack t3
     sb t3, 0(t2)
     end_word
 
-word_header branchIfZero, b0, 0, branch, storeByte
+word_header branchIfZero, "b0", 0, branch, storeByte
     PopDataStack t2
     mv t1, s0 # s0 == PC
     beq t2, zero, 1f
@@ -210,27 +216,27 @@ word_header branchIfZero, b0, 0, branch, storeByte
 2:
     end_word
 
-word_header branch, b, 0, forth_add, branchIfZero
+word_header branch, "b", 0, forth_add, branchIfZero
     mv t1, s0
     addi t1, t1, CELL_SIZE # get literal
     lw t1, 0(t1)
     add s0, s0, t1         # add literal to PC
     end_word
 
-word_header forth_add, +, 0, literal, branch
+word_header forth_add, "+", 0, literal, branch
     PopDataStack t2
     PopDataStack t3
     add t2, t2, t3
     PushDataStack t2
     end_word
     
-word_header literal, literal, 0, dup, forth_add
+word_header literal, "literal", 0, dup, forth_add
     addi s0, s0, CELL_SIZE
     lw t3, 0(s0)
     PushDataStack t3
     end_word
 
-word_header dup, dup, 0, return, literal
+word_header dup, "dup", 0, return, literal
     PopDataStack t2
     PushDataStack t2
     PushDataStack t2
@@ -240,25 +246,25 @@ word_header return, "r", 0, forth_minus, dup
     PopReturnStack s0
     end_word
 
-word_header forth_minus, -, 0, swap, return
+word_header forth_minus, "-", 0, swap, return
     PopDataStack t2
     PopDataStack t3
     sub t3, t3, t2
     PushDataStack t3
     end_word
     
-word_header swap, swap, 0, drop, forth_minus
+word_header swap, "swap", 0, drop, forth_minus
     PopDataStack t2
     PopDataStack t3
     PushDataStack t2
     PushDataStack t3
     end_word
 
-word_header drop, drop, 0, dup2, swap
+word_header drop, "drop", 0, dup2, swap
     PopDataStack t1
     end_word
     
-word_header dup2, 2dup, 0, findXT, drop
+word_header dup2, "2dup", 0, findXT, drop
     PopDataStack t1
     PopDataStack t2
     PushDataStack t2
@@ -267,7 +273,7 @@ word_header dup2, 2dup, 0, findXT, drop
     PushDataStack t1
     end_word
     
-word_header findXT, findXT, 0, forth_and, dup2
+word_header findXT, "findXT", 0, forth_and, dup2
     PopDataStack t5   # t5 == string ptr
     PopDataStack t6   # t6 == string length
     
@@ -303,32 +309,32 @@ word_header findXT, findXT, 0, forth_and, dup2
     PushDataStack t4
     end_word          
     
-word_header forth_and, "and", 0, forth_or, findXT
+word_header forth_and, "!&", 0, forth_or, findXT
     PopDataStack t2
     PopDataStack t3
     and t2, t2, t3
     PushDataStack t2
     end_word
 
-word_header forth_or, "or", 0, forth_xor, forth_and
+word_header forth_or, "!|", 0, forth_xor, forth_and
     PopDataStack t2
     PopDataStack t3
     or t2, t2, t3
     PushDataStack t2
     end_word
 
-word_header forth_xor, "xor", 0, here, forth_or
+word_header forth_xor, "!^", 0, here, forth_or
     PopDataStack t2
     PopDataStack t3
     xor t2, t2, t3
     PushDataStack t2
     end_word
     
-word_header here, here, 0, rot, forth_xor
+word_header here, "here", 0, rot, forth_xor
     PushDataStack s5
     end_word
 
-word_header rot, rot, 0, push_return, here
+word_header rot, "rot", 0, push_return, here
     PopDataStack t1
     PopDataStack t2
     PopDataStack t3
@@ -337,12 +343,12 @@ word_header rot, rot, 0, push_return, here
     PushDataStack t3
     end_word
     
-word_header push_return, ">R", 0, pop_return, rot
+word_header push_return, "!>R", 0, pop_return, rot
     PopDataStack t1
     PushReturnStack t1
     end_word
 
-word_header pop_return, "<R", 0, forth_fatoi, push_return
+word_header pop_return, "!<R", 0, forth_fatoi, push_return
     PopReturnStack t1
     PushDataStack t1
     end_word
@@ -355,7 +361,10 @@ word_header forth_fatoi, "$", 0, show, pop_return
     PushDataStack a2
     end_word
 
-word_header show, show, 0, execute, forth_fatoi
+# Its good to have this one NOT in forth, because you can rely on it working correctly more
+# knowing that its not part of the forth system and it is very useful for debugging. There is just
+# less things to go wrong this way.
+word_header show, "show", 0, execute, forth_fatoi
     # DATA STACK
     la a0, show_data_stack_begin_str
     li a1, UART_BASE
@@ -410,12 +419,12 @@ data_stack_empty:
     call puts
     end_word
 
-word_header execute, execute, 0, showR, show
+word_header execute, "execute", 0, showR, show
     PopDataStack t2
     jalr ra, t2, 0
     end_word         # should never be hit
 
-word_header showR, showR, 0, setHere, execute
+word_header showR, "showR", 0, setHere, execute
     # RETURN STACK
     la a0, show_return_stack_begin_str
     li a1, UART_BASE
@@ -470,11 +479,11 @@ return_stack_empty:
     call puts
     end_word
 
-word_header setHere, setHere, 0, return_stack_index, showR
+word_header setHere, "setHere", 0, return_stack_index, showR
     PopDataStack s5
     end_word
 
-word_header return_stack_index, R[], 0, getDictionaryEnd, setHere
+word_header return_stack_index, "R[]", 0, getDictionaryEnd, setHere
     PopDataStack t3
     bgt t3, zero, invalid_rstack_index
     mv t0, s3 # s3 - return stack base pointer
@@ -495,21 +504,21 @@ invalid_rstack_index:
     PushDataStack t3
     end_word
 
-word_header getDictionaryEnd, getDictionaryEnd, 0, setDictionaryEnd, return_stack_index
+word_header getDictionaryEnd, "getDictionaryEnd", 0, setDictionaryEnd, return_stack_index
     # ( -- pDictEnd )
     la t1, vm_p_dictionary_end
     lw t1, 0(t1)
     PushDataStack t1
     end_word
 
-word_header setDictionaryEnd, setDictionaryEnd, 0, toCString, getDictionaryEnd
+word_header setDictionaryEnd, "setDictionaryEnd", 0, toCString, getDictionaryEnd
     # ( pDictEndNew -- )
     PopDataStack t1
     la t0, vm_p_dictionary_end
     sw t1, 0(t0)
     end_word
 
-word_header toCString, toCString, 0, setNumInputHex, setDictionaryEnd
+word_header toCString, "toCString", 0, setNumInputHex, setDictionaryEnd
     # ( inStringLen inString outCString -- )
     PopDataStack a0
     PopDataStack a1
@@ -517,14 +526,14 @@ word_header toCString, toCString, 0, setNumInputHex, setDictionaryEnd
     call forth_string_to_c
     end_word
 
-word_header setNumInputHex, ioHex, 0, setNumInputDec, toCString
+word_header setNumInputHex, "ioHex", 0, setNumInputDec, toCString
     la t1, vm_flags
     lw t0, 0(t1)
     ori t0, t0, NUM_IO_HEX_BIT
     sw t0, 0(t1)
     end_word
 
-word_header setNumInputDec, ioDec, 0, equals, setNumInputHex
+word_header setNumInputDec, "ioDec", 0, equals, setNumInputHex
     la t1, vm_flags
     lw t0, 0(t1)
     li t2, NUM_IO_HEX_BIT
@@ -533,7 +542,7 @@ word_header setNumInputDec, ioDec, 0, equals, setNumInputHex
     sw t0, 0(t1)
     end_word
 
-word_header equals, (=), 0, notEquals, setNumInputDec
+word_header equals, "!=", 0, notEquals, setNumInputDec
     PopDataStack t1
     PopDataStack t2
     beq t1, t2, equals_equals
@@ -545,7 +554,7 @@ equals_equals:
 equals_end:
     end_word
     
-word_header notEquals, (!=), 0, lessThan, equals
+word_header notEquals, "!!!=", 0, lessThan, equals
     PopDataStack t1
     PopDataStack t2
     bne t1, t2, nq_equals
@@ -557,7 +566,7 @@ nq_equals:
 nq_end:
     end_word
     
-word_header lessThan, <, 0, greaterThan, notEquals
+word_header lessThan, "!<", 0, greaterThan, notEquals
     PopDataStack t1
     PopDataStack t2
     blt t2, t1, lt
@@ -569,7 +578,7 @@ lt:
 lt_end:
     end_word
 
-word_header greaterThan, >, 0, modulo, lessThan
+word_header greaterThan, "!>", 0, modulo, lessThan
     PopDataStack t1
     PopDataStack t2
     bgt t2, t1, gt
@@ -582,7 +591,7 @@ gt_end:
     end_word
 
 last_vm_word: # IMPORTANT: KEEP THIS LABEL POINTING TO THE LAST VM WORD.
-word_header modulo, mod, 0, first_system_word, greaterThan
+word_header modulo, "mod", 0, first_system_word, greaterThan
     PopDataStack t1
     PopDataStack t2
     rem t2, t2, t1

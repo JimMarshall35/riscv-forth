@@ -46,8 +46,8 @@ tests = [
     NotPyTestCase(["1 2 show\r"], "[ 1, 2 ]", "drop drop show\r"),
     NotPyTestCase(["1 2 + show\r"], "[ 3 ]", "drop show\r"),
     NotPyTestCase(["4 6 - show\r"], "[ -2 ]", "drop show\r"),
-    NotPyTestCase(["bw jim 1 2 3 4 5 ew\r", "jim show\r"], "[ 1, 2, 3, 4, 5 ]", "drop drop drop drop drop show\r"),
-    NotPyTestCase(["bw jim2 jim 6 7 8 ew\r", "jim2 show\r"], "[ 1, 2, 3, 4, 5, 6, 7, 8 ]", "drop drop drop drop drop drop drop drop show\r"),
+    NotPyTestCase([": jim 1 2 3 4 5 ;\r", "jim show\r"], "[ 1, 2, 3, 4, 5 ]", "drop drop drop drop drop show\r"),
+    NotPyTestCase([": jim2 jim 6 7 8 ;\r", "jim2 show\r"], "[ 1, 2, 3, 4, 5, 6, 7, 8 ]", "drop drop drop drop drop drop drop drop show\r"),
 ]
 
 def test_run():

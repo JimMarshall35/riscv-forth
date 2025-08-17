@@ -40,11 +40,11 @@ string UnknownTokenEndStr_ "'\n"
 
 ( flags )
 
-: setCompile ( -- ) flags @ COMPILE_BIT or flags ! ;
+: setCompile ( -- ) flags @ COMPILE_BIT | flags ! ;
 
-: setInterpret ( -- ) flags @ COMPILE_BIT -1 xor and flags ! ;
+: setInterpret ( -- ) flags @ COMPILE_BIT -1 ^ & flags ! ;
 
-: get_compile_bit ( -- 1or0 ) flags @ COMPILE_BIT and 0 > if 1 r then 0 ;
+: get_compile_bit ( -- 1or0 ) flags @ COMPILE_BIT & 0 > if 1 r then 0 ;
 
 ( loop counter functions )
 
@@ -61,9 +61,7 @@ string UnknownTokenEndStr_ "'\n"
     drop
 ;
 
-( TODO: replace logic_and and logic_or with && and || when possible )
-
-: logic_and ( bool1 bool2 -- 1IfBoth1Else0 ) 
+: && ( bool1 bool2 -- 1IfBoth1Else0 ) 
     if
         ( bool2 is true )
         if
@@ -77,11 +75,15 @@ string UnknownTokenEndStr_ "'\n"
     then
 ;
 
-: logic_or ( bool1 bool2 -- 1IfEitherElse0 ) 
+asm_name logic_and
+
+: || ( bool1 bool2 -- 1IfEitherElse0 ) 
     if drop 1 r then
     if 1 r then
     0 r
 ;
+
+asm_name logic_or
 
 : logic_not ( bool -- !bool )
     if
@@ -91,18 +93,20 @@ string UnknownTokenEndStr_ "'\n"
     then
 ;
 
-( todo: replace gte and lte with >= and <= when possible )
-
-: gte ( int1 int2 -- 1IfInt1>=Int2 )
-    2dup = rot rot > logic_or
+: >= ( int1 int2 -- 1IfInt1>=Int2 )
+    2dup = rot rot > ||
 ;
 
-: lte ( int1 int2 -- 1IfInt1>=Int2 )
-    2dup = rot rot < logic_or
+asm_name gte
+
+: <= ( int1 int2 -- 1IfInt1>=Int2 )
+    2dup = rot rot < ||
 ;
+
+asm_name lte
 
 : isCharNumeric ( char -- 1IfNumericElse0 )
-    dup ASCII_NUM_RANGE_START gte swap ASCII_NUM_RANGE_END lte logic_and
+    dup ASCII_NUM_RANGE_START >= swap ASCII_NUM_RANGE_END <= &&
 ;
 
 : isStringValidNumber ( pString nStringSize -- 0ifNotValid )
@@ -112,7 +116,7 @@ string UnknownTokenEndStr_ "'\n"
             c@ dup ( pString char char )
             MINUS_CHAR =  ( pString char isMinusChar )
             swap isCharNumeric
-            logic_or logic_not if
+            || logic_not if
                 ( character is not '-' or 0-9 )
                 drop
                 <R <R drop drop  
@@ -150,10 +154,13 @@ string UnknownTokenEndStr_ "'\n"
 
 : tokenBufferToHeaderCode ( buffer -- ) TokenBufferSize_ @ swap Tokenbuffer_ swap toCString ;
 
-: cw ( word2compile -- ) here ! here CELL_SIZE + setHere ;
+: , ( word2compile -- ) here ! here CELL_SIZE + setHere ;
 
-( I can't call this cb because the compiler interprets that as a hex number for some reason - this is misbehavior of the compiler )
-: cbyte ( byte2compile -- ) here c! here 1 + setHere ;
+asm_name cw
+
+: c, ( byte2compile -- ) here c! here 1 + setHere ;
+
+asm_name cbyte
 
 : doToken  
     TokenBufferSize_ @ Tokenbuffer_ findXT
@@ -164,7 +171,7 @@ string UnknownTokenEndStr_ "'\n"
             dup getXTImmediate if 
                 execute
             else
-                cw
+                ,
             then
         else
             execute
@@ -177,8 +184,8 @@ string UnknownTokenEndStr_ "'\n"
             ( valid number string in token buffer )
             Tokenbuffer_ TokenBufferSize_ @ $  ( converted number on stack )
             get_compile_bit 0 != if
-                LiteralStr_ findXT cw ( TODO: NEED TO IMPLEMENT STRING LITERALS IN COMPILER - WILL HAND EDIT IN )
-                cw
+                LiteralStr_ findXT , ( TODO: NEED TO IMPLEMENT STRING LITERALS IN COMPILER - WILL HAND EDIT IN )
+                ,
             then
         else 
             ( not valid )
@@ -190,7 +197,7 @@ string UnknownTokenEndStr_ "'\n"
 : seekTokenStart ( -- 0or1 )
     begin
         LineBuffer_ LineBufferI_ @ + c@         ( char@I )
-        dup SPACE_CHAR != swap NEWLINE_CHAR != logic_and if
+        dup SPACE_CHAR != swap NEWLINE_CHAR != && if
             0 r                                ( I points to something other than a space - there's a token to load return 0 )
         then
         LineBufferI_ @ 1 + LineBufferI_ !      ( increment line buffer I )
@@ -313,24 +320,26 @@ string UnknownTokenEndStr_ "'\n"
     0 until
 ;
 
-: bw ( pHeader )
+: : ( pHeader )
     ( Implementation is for COMPRESSED INSTRUCTION FORMAT RISC-V )
     2 alignHere
     setCompile
     compileHeader
     ( Eventually I will write an assembler library and this raw machine code         )
     ( will be replaced with what will appear to be readable assembly code RPN style  )
-    0xB3 cbyte 0x82 cbyte 0x49 cbyte 0x01 cbyte ( add	t0,s3,s4 )
-    0x23 cbyte 0xA0 cbyte 0x82 cbyte 0x00 cbyte ( sw	s0,0[t0] )
-    0x11 cbyte 0x0A cbyte                       ( addi	s4,s4,4  )
-    0x17 cbyte 0x04 cbyte 0x00 cbyte 0x00 cbyte ( auipc	s0,0x0   )
-    0x13 cbyte 0x04 cbyte 0x04 cbyte 0x01 cbyte ( mv	s0,s0    )
-    0x83 cbyte 0x22 cbyte 0x04 cbyte 0x00 cbyte ( lw	t0,0[s0] )
-    0xE7 cbyte 0x80 cbyte 0x02 cbyte 0x00 cbyte ( jalr	t0       )
+    0xB3 c, 0x82 c, 0x49 c, 0x01 c, ( add	t0,s3,s4 )
+    0x23 c, 0xA0 c, 0x82 c, 0x00 c, ( sw	s0,0[t0] )
+    0x11 c, 0x0A c,                       ( addi	s4,s4,4  )
+    0x17 c, 0x04 c, 0x00 c, 0x00 c, ( auipc	s0,0x0   )
+    0x13 c, 0x04 c, 0x04 c, 0x01 c, ( mv	s0,s0    )
+    0x83 c, 0x22 c, 0x04 c, 0x00 c, ( lw	t0,0[s0] )
+    0xE7 c, 0x80 c, 0x02 c, 0x00 c, ( jalr	t0       )
 ;
 
-: ew ( pHeader -- )
-    ReturnStr_ findXT cw
+asm_name bw
+
+: ; ( pHeader -- )
+    ReturnStr_ findXT ,
     setInterpret
     ( only set the dictionary end ptr, from where token searches start, )
     ( after the word is compiled so that a word can be redfined and use )
@@ -339,3 +348,4 @@ string UnknownTokenEndStr_ "'\n"
     setDictionaryEnd
 ; immediate 
 
+asm_name ew

@@ -12,7 +12,7 @@
 
 .equ TOKEN_BUFFER_MAX_SIZE, 32
 .equ LINE_BUFFER_MAX_SIZE, 128
-
+.altmacro
 
 .data
 
@@ -66,7 +66,7 @@ div \regOut, \regSize, \regTemp
 
 .macro padded_string string, max
 1:
-    .ascii "\string"
+    .ascii \string
 2:
     .iflt \max - (2b - 1b)
     .error "String too long"
@@ -90,7 +90,17 @@ div \regOut, \regSize, \regTemp
 
 .macro word_header_unitialised name, code, immediate
 \name:
-    padded_string \code, HEADER_CODE_BUF_SIZE
+    #padded_string \code, HEADER_CODE_BUF_SIZE
+1:
+    .ascii \code
+2:
+    .iflt HEADER_CODE_BUF_SIZE - (2b - 1b)
+    .error "String too long"
+    .endif
+
+    .ifgt HEADER_CODE_BUF_SIZE - (2b - 1b)
+    .zero HEADER_CODE_BUF_SIZE - (2b - 1b)
+    .endif
     .word 0
     .word 0
     .word \immediate
@@ -118,7 +128,17 @@ div \regOut, \regSize, \regTemp
 
 .macro word_header name, code, immediate, next, prev
 \name:
-    padded_string \code, HEADER_CODE_BUF_SIZE
+    #padded_string \code, HEADER_CODE_BUF_SIZE
+1:
+    .ascii \code
+2:
+    .iflt HEADER_CODE_BUF_SIZE - (2b - 1b)
+    .error "String too long"
+    .endif
+
+    .ifgt HEADER_CODE_BUF_SIZE - (2b - 1b)
+    .zero HEADER_CODE_BUF_SIZE - (2b - 1b)
+    .endif
     .word \next
     .word \prev
     .word \immediate
