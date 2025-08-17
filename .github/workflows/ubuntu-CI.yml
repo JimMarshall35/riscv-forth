@@ -41,20 +41,19 @@ jobs:
         sudo apt-get install -y qemu-system
         sudo apt-get install -y python3-pexpect
         sudo apt-get install python3-pytest
+    - name: Test testing dependencies
+      run: |
+        qemu-system-riscv32 -h
+        pytest -h 
     - uses: actions/checkout@v4
     - name: Download built image
       uses: actions/download-artifact@v4
       with:
         name: qemu-image
-    - name: Test build dependencies
-      run: |
-        qemu-system-riscv32 -h
-        pytest -h 
     - name: Run Tests
       continue-on-error: true
       run: |
         pytest
-        ls
     - name: Print Test Log
       run: |
         cat ./testlog.txt
