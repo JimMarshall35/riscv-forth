@@ -82,6 +82,8 @@ def escape_for_gas_macro_arg(s):
             ns += '!,'
         elif c == ';':
             ns += '!;'
+        elif c == '\'':
+            ns += '!\''
         else:
             ns += c
     return ns
@@ -467,7 +469,6 @@ def do_cmd_args():
     parser.add_argument("input_file", type=str, help="the input file to use")
     parser.add_argument("-a","--asm_file", type=str, help="the assembly file containing the prexisting precompiled forth dictionary. Needed to output word headers that are properly linked in with the others. If specified, will append output onto end of this file, and return a new copy as the output file. Also used to warn about words that can't be found")
     parser.add_argument("-o", "--output_file", type=str, help="output assembly file, defaults to out.asm")
-    
     args = parser.parse_args()
     return args
 

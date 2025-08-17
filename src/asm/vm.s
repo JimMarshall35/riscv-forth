@@ -3,7 +3,7 @@
 .altmacro
 #
 #   Prefix any character with ! to use it literally in a macro.
-#   We will use "<>" to denote strings in macro arguments.
+#   We will use "" to denote strings in macro arguments.
 #   https://sourceware.org/binutils/docs/as/Altmacro.html
 # 
 
@@ -60,6 +60,7 @@
 .global lessThan_impl
 .global greaterThan_impl
 .global modulo_impl
+.global forth_mul_impl
 
 .global last_vm_word
 
@@ -273,7 +274,7 @@ word_header dup2, "2dup", 0, findXT, drop
     PushDataStack t1
     end_word
     
-word_header findXT, "findXT", 0, forth_and, dup2
+word_header findXT, "!'", 0, forth_and, dup2
     PopDataStack t5   # t5 == string ptr
     PopDataStack t6   # t6 == string length
     
@@ -590,10 +591,17 @@ gt:
 gt_end:
     end_word
 
-last_vm_word: # IMPORTANT: KEEP THIS LABEL POINTING TO THE LAST VM WORD.
-word_header modulo, "mod", 0, first_system_word, greaterThan
+word_header modulo, "mod", 0, forth_mul, greaterThan
     PopDataStack t1
     PopDataStack t2
     rem t2, t2, t1
+    PushDataStack t2
+    end_word
+
+last_vm_word: # IMPORTANT: KEEP THIS LABEL POINTING TO THE LAST VM WORD.
+word_header forth_mul, "!*", 0, first_system_word, modulo
+    PopDataStack t1
+    PopDataStack t2
+    mul t2, t2, t1
     PushDataStack t2
     end_word

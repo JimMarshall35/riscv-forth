@@ -38,6 +38,22 @@ string UnknownTokenStartStr_ "unknowntoken:'" ( TODO: needs compiler change to a
 
 string UnknownTokenEndStr_ "'\n"
 
+string branch0TokenStr_ "b0"
+
+string branchTokenStr_ "b"
+
+string pushReturnStr_ ">R"
+
+string popReturnStr_ "<R"
+
+string addStr_ "+"
+
+string twodupStr_ "2dup"
+
+string equalsStr_ "="
+
+string dropStr_ "drop"
+
 ( flags )
 
 : setCompile ( -- ) flags @ COMPILE_BIT | flags ! ;
@@ -163,7 +179,7 @@ asm_name cw
 asm_name cbyte
 
 : doToken  
-    TokenBufferSize_ @ Tokenbuffer_ findXT
+    TokenBufferSize_ @ Tokenbuffer_ '
     ( either 0 on stack or an excution token )
     dup 0 != if
         ( we've found a valid xt )
@@ -184,7 +200,7 @@ asm_name cbyte
             ( valid number string in token buffer )
             Tokenbuffer_ TokenBufferSize_ @ $  ( converted number on stack )
             get_compile_bit 0 != if
-                LiteralStr_ findXT , ( TODO: NEED TO IMPLEMENT STRING LITERALS IN COMPILER - WILL HAND EDIT IN )
+                LiteralStr_ ' , ( TODO: NEED TO IMPLEMENT STRING LITERALS IN COMPILER - WILL HAND EDIT IN )
                 ,
             then
         else 
@@ -329,7 +345,7 @@ asm_name cbyte
     ( will be replaced with what will appear to be readable assembly code RPN style  )
     0xB3 c, 0x82 c, 0x49 c, 0x01 c, ( add	t0,s3,s4 )
     0x23 c, 0xA0 c, 0x82 c, 0x00 c, ( sw	s0,0[t0] )
-    0x11 c, 0x0A c,                       ( addi	s4,s4,4  )
+    0x11 c, 0x0A c,                 ( addi	s4,s4,4  )
     0x17 c, 0x04 c, 0x00 c, 0x00 c, ( auipc	s0,0x0   )
     0x13 c, 0x04 c, 0x04 c, 0x01 c, ( mv	s0,s0    )
     0x83 c, 0x22 c, 0x04 c, 0x00 c, ( lw	t0,0[s0] )
@@ -339,7 +355,7 @@ asm_name cbyte
 asm_name bw
 
 : ; ( pHeader -- )
-    ReturnStr_ findXT ,
+    ReturnStr_ ' ,
     setInterpret
     ( only set the dictionary end ptr, from where token searches start, )
     ( after the word is compiled so that a word can be redfined and use )
@@ -349,3 +365,68 @@ asm_name bw
 ; immediate 
 
 asm_name ew
+
+: if ( -- addressToBackpatch )
+    branch0TokenStr_ ' ,
+    here
+    0 ,
+; immediate 
+
+: else ( ifBranchAddressToBackpatch -- elseBranchAddressToBackpatch )
+    branchTokenStr_ ' ,
+    here                 ( ifBranch here )
+    0 ,
+    swap dup             ( here ifBranch ifBranch )
+    here swap -          ( here ifBranch here-ifBranch )
+    swap !               ( here )
+; immediate 
+
+: then ( ifBranchAddressToBackpatch -- )
+    dup
+    here swap -
+    swap !
+; immediate 
+
+: begin ( -- loopMarker )
+    here
+; immediate 
+
+: until ( loopMarker -- )
+    branch0TokenStr_ ' ,
+    here swap - -1 * , 
+; immediate 
+
+: do ( -- startLabel initialJump )
+    branchTokenStr_ ' ,    ( initial jump to test label )
+    here 0 ,
+    here                   ( initialJump startlabel )
+    swap                   ( startLabel initialJump )
+    pushReturnStr_ ' dup , ( compile code to push i onto return stack )
+    ,                      ( compile code to push limit onto return stack ) 
+; immediate 
+
+
+: loop ( startLabel initialJump -- ) 
+    ( compile code to pop i and limit from return stack )
+    popReturnStr_ ' dup , ,
+
+    ( compile code to increment i )
+    LiteralStr_ ' ,
+    1 ,
+    addStr_ ' ,
+
+    ( we are now at the test label )
+    dup ( startLabel initialJump initialJump )
+    here swap -
+    swap !
+    ( startLabel )
+
+    ( compile code to compare i and limit and branch if not equal )
+    twodupStr_ ' ,
+    equalsStr_ ' ,
+    branch0TokenStr_ ' ,
+    here swap - -1 * ,
+
+    ( compile code to clean up i and limit from int stack now that the loop has ended ) 
+    dropStr_ ' dup , , 
+; immediate 

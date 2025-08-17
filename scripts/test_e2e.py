@@ -48,6 +48,11 @@ tests = [
     NotPyTestCase(["4 6 - show\r"], "[ -2 ]", "drop show\r"),
     NotPyTestCase([": jim 1 2 3 4 5 ;\r", "jim show\r"], "[ 1, 2, 3, 4, 5 ]", "drop drop drop drop drop show\r"),
     NotPyTestCase([": jim2 jim 6 7 8 ;\r", "jim2 show\r"], "[ 1, 2, 3, 4, 5, 6, 7, 8 ]", "drop drop drop drop drop drop drop drop show\r"),
+    NotPyTestCase([": jim if 1 2 3 else 4 5 6 then ;\r", "1 jim\r", "0 jim show\r"], "[ 1, 2, 3, 4, 5, 6 ]", "drop drop drop drop drop drop show\r"),
+    NotPyTestCase([": begintest 0 begin 1 + dup 10 = if r then 0 until ;\r", "begintest show\r"], "[ 10 ]", "drop show\r"),
+    NotPyTestCase([": testloop 0 do i loop ;\r", "4 testloop show\r"], "[ 0, 1, 2, 3 ]", "drop drop drop drop show\r"),
+    NotPyTestCase(["3 testloop show\r"], "[ 0, 1, 2 ]", "drop drop drop show\r"),
+    NotPyTestCase([": k 0 do i 2 mod if -1 else i then loop ;\r", "5 k show\r"], "[ 0, -1, 2, -1, 4 ]", "drop drop drop drop drop show\r")
 ]
 
 def test_run():
