@@ -123,7 +123,7 @@ class CompiledWord:
             lines += [x.txt for x in self.body]
         else:
             # add header macros
-            lines.append(f"word_header {self.assemblerLabelName if self.assemblerLabelName != "" else self.code}, \"{escape_for_gas_macro_arg(self.code)}\", {self.immediate_str()}, {nextword_str(self.nextWord)}, {self.prevWord}")
+            lines.append(f"word_header {self.get_label()}, \"{escape_for_gas_macro_arg(self.code)}\", {self.immediate_str()}, {nextword_str(self.nextWord)}, {self.prevWord}")
             lines.append(f"    secondary_word {self.get_label()}")
             # add word body
             lines += [x.txt for x in self.body]
