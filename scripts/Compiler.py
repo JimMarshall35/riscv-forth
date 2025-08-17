@@ -213,7 +213,7 @@ class Program:
         if len(self.compiledWords) > 0:
             self.compiledWords[0].prevWord = "last_vm_word" # vm must export a label called "last_vm_word" that points to the last word in that file
     def get_globals_for_word(self):
-        g = [f".global {w.assemblerLabelName if w.assemblerLabelName != "" else w.code}_impl" for w in self.compiledWords]
+        g = [f".global {w.get_label()}_impl" for w in self.compiledWords]
         g.append(".global first_system_word")
         return g
     def get_preamble_lines(self):
