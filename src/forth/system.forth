@@ -178,6 +178,12 @@ asm_name cw
 
 asm_name cbyte
 
+: h, ( half2compile -- ) here h! here 2 + setHere ;
+
+asm_name chalf
+
+: compileXT ( XT -- ) p2o h, ;
+
 : doToken  
     TokenBufferSize_ @ Tokenbuffer_ '
     ( either 0 on stack or an excution token )
@@ -187,7 +193,7 @@ asm_name cbyte
             dup getXTImmediate if 
                 execute
             else
-                ,
+                compileXT
             then
         else
             execute
@@ -200,7 +206,7 @@ asm_name cbyte
             ( valid number string in token buffer )
             Tokenbuffer_ TokenBufferSize_ @ $  ( converted number on stack )
             get_compile_bit 0 != if
-                LiteralStr_ ' , ( TODO: NEED TO IMPLEMENT STRING LITERALS IN COMPILER - WILL HAND EDIT IN )
+                LiteralStr_ ' compileXT ( TODO: NEED TO IMPLEMENT STRING LITERALS IN COMPILER )
                 ,
             then
         else 
@@ -336,6 +342,10 @@ asm_name cbyte
     0 until
 ;
 
+: MakeJumpToEnterInstruction 
+    &enter here - 12 << 0x0000006f |
+;
+
 : : ( pHeader )
     ( Implementation is for COMPRESSED INSTRUCTION FORMAT RISC-V )
     2 alignHere
@@ -343,19 +353,17 @@ asm_name cbyte
     compileHeader
     ( Eventually I will write an assembler library and this raw machine code         )
     ( will be replaced with what will appear to be readable assembly code RPN style  )
-    0xB3 c, 0x82 c, 0x49 c, 0x01 c, ( add	t0,s3,s4 )
-    0x23 c, 0xA0 c, 0x82 c, 0x00 c, ( sw	s0,0[t0] )
-    0x11 c, 0x0A c,                 ( addi	s4,s4,4  )
-    0x17 c, 0x04 c, 0x00 c, 0x00 c, ( auipc	s0,0x0   )
-    0x13 c, 0x04 c, 0x04 c, 0x01 c, ( mv	s0,s0    )
-    0x83 c, 0x22 c, 0x04 c, 0x00 c, ( lw	t0,0[s0] )
-    0xE7 c, 0x80 c, 0x02 c, 0x00 c, ( jalr	t0       )
+    
+    0x00000517 ,
+    0x00050513 ,
+    ( 0xf26fd06f , )
+    MakeJumpToEnterInstruction ,
 ;
 
 asm_name bw
 
 : ; ( pHeader -- )
-    ReturnStr_ ' ,
+    ReturnStr_ ' compileXT
     setInterpret
     ( only set the dictionary end ptr, from where token searches start, )
     ( after the word is compiled so that a word can be redfined and use )
@@ -367,13 +375,13 @@ asm_name bw
 asm_name ew
 
 : if ( -- addressToBackpatch )
-    branch0TokenStr_ ' ,
+    branch0TokenStr_ ' compileXT
     here
     0 ,
 ; immediate 
 
 : else ( ifBranchAddressToBackpatch -- elseBranchAddressToBackpatch )
-    branchTokenStr_ ' ,
+    branchTokenStr_ ' compileXT
     here                 ( ifBranch here )
     0 ,
     swap dup             ( here ifBranch ifBranch )
@@ -392,28 +400,28 @@ asm_name ew
 ; immediate 
 
 : until ( loopMarker -- )
-    branch0TokenStr_ ' ,
+    branch0TokenStr_ ' compileXT
     here swap - -1 * , 
 ; immediate 
 
 : do ( -- startLabel initialJump )
-    branchTokenStr_ ' ,    ( initial jump to test label )
+    branchTokenStr_ ' compileXT    ( initial jump to test label )
     here 0 ,
-    here                   ( initialJump startlabel )
-    swap                   ( startLabel initialJump )
-    pushReturnStr_ ' dup , ( compile code to push i onto return stack )
-    ,                      ( compile code to push limit onto return stack ) 
+    here                           ( initialJump startlabel )
+    swap                           ( startLabel initialJump )
+    pushReturnStr_ ' dup compileXT ( compile code to push i onto return stack )
+    compileXT                      ( compile code to push limit onto return stack ) 
 ; immediate 
 
 
 : loop ( startLabel initialJump -- ) 
     ( compile code to pop i and limit from return stack )
-    popReturnStr_ ' dup , ,
+    popReturnStr_ ' dup compileXT compileXT
 
     ( compile code to increment i )
-    LiteralStr_ ' ,
+    LiteralStr_ ' compileXT
     1 ,
-    addStr_ ' ,
+    addStr_ ' compileXT
 
     ( we are now at the test label )
     dup ( startLabel initialJump initialJump )
@@ -422,11 +430,11 @@ asm_name ew
     ( startLabel )
 
     ( compile code to compare i and limit and branch if not equal )
-    twodupStr_ ' ,
-    equalsStr_ ' ,
-    branch0TokenStr_ ' ,
-    here swap - -1 * ,
+    twodupStr_ ' compileXT
+    equalsStr_ ' compileXT
+    branch0TokenStr_ ' compileXT
+    here swap - -1 * compileXT
 
     ( compile code to clean up i and limit from int stack now that the loop has ended ) 
-    dropStr_ ' dup , , 
+    dropStr_ ' dup compileXT compileXT 
 ; immediate 

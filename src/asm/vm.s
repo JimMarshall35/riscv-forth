@@ -61,8 +61,14 @@
 .global greaterThan_impl
 .global modulo_impl
 .global forth_mul_impl
-
+.global ptr_to_offset_impl
+.global offset_to_ptr_impl
 .global last_vm_word
+.global storeHalf_impl
+.global shift_left_impl
+.global shift_right_impl
+.global get_enter_label_addr_impl
+.global enter_word
 
 #define VM_STACK_BOUNDS_CHECK
 .global title_string
@@ -78,7 +84,7 @@
     # s3 - return stack base pointer
     # s4 - return stack size
     # s5 - memory top
-
+    # s6 - thread word base address
 
 .global vm_run
 
@@ -160,12 +166,21 @@ vm_run:
     li s4, 0
 
     la s5, _dataEnd
+    la s6, _start # s6 is the base address for the thread word
 
     la s0, outerInterpreter_impl
     call outerInterpreter_impl
 
+
     RestoreReturnAddress
     ret
+
+enter_word:
+    PushReturnStack s0
+    mv s0, a0
+    lh t0, 0(s0)
+    add t0, t0, s6
+    jalr ra, t0, 0
 
 word_header_first emit,   "emit",     0, key
     PopDataStack a0
@@ -197,7 +212,19 @@ word_header loadByte, "c@", 0, storeByte, store
     PushDataStack t3
     end_word
 
-word_header storeByte, "c!!", 0, branchIfZero, loadByte
+word_header storeByte, "c!!", 0, storeHalf, loadByte
+    PopDataStack t2
+    PopDataStack t3
+    sb t3, 0(t2)
+    end_word
+
+word_header storeHalf, "h!!", 0, loadHalf, storeByte
+    PopDataStack t2
+    PopDataStack t3
+    sb t3, 0(t2)
+    end_word
+
+word_header loadHalf, "h@", 0, branchIfZero, storeHalf
     PopDataStack t2
     PopDataStack t3
     sb t3, 0(t2)
@@ -211,7 +238,7 @@ word_header branchIfZero, "b0", 0, branch, storeByte
     addi s0, s0, CELL_SIZE # skip over literal
     j 2f
 1:
-    addi t1, t1, CELL_SIZE # get literal
+    addi t1, t1, 2#CELL_SIZE # get literal
     lw t1, 0(t1)
     add s0, s0, t1         # add literal to PC
 2:
@@ -219,7 +246,7 @@ word_header branchIfZero, "b0", 0, branch, storeByte
 
 word_header branch, "b", 0, forth_add, branchIfZero
     mv t1, s0
-    addi t1, t1, CELL_SIZE # get literal
+    addi t1, t1, 2#CELL_SIZE # get literal
     lw t1, 0(t1)
     add s0, s0, t1         # add literal to PC
     end_word
@@ -232,8 +259,9 @@ word_header forth_add, "+", 0, literal, branch
     end_word
     
 word_header literal, "literal", 0, dup, forth_add
-    addi s0, s0, CELL_SIZE
+    addi s0, s0, 2
     lw t3, 0(s0)
+    addi s0, s0, 2
     PushDataStack t3
     end_word
 
@@ -598,10 +626,45 @@ word_header modulo, "mod", 0, forth_mul, greaterThan
     PushDataStack t2
     end_word
 
-last_vm_word: # IMPORTANT: KEEP THIS LABEL POINTING TO THE LAST VM WORD.
-word_header forth_mul, "!*", 0, first_system_word, modulo
+word_header forth_mul, "!*", 0, offset_to_ptr, modulo
     PopDataStack t1
     PopDataStack t2
     mul t2, t2, t1
     PushDataStack t2
+    end_word
+
+word_header offset_to_ptr, "o2p", 0, ptr_to_offset, forth_mul
+    # ( offset16 -- ptr32 )
+    PopDataStack t1
+    add t1, s6, t1 
+    PushDataStack t1
+    end_word
+
+word_header ptr_to_offset, "p2o", 0, get_enter_label_addr, offset_to_ptr
+    # ( ptr32 -- offset16 )
+    PopDataStack t1
+    sub t1, t1, s6
+    PushDataStack t1
+    end_word
+
+word_header get_enter_label_addr, "!&enter", 0, shift_left, ptr_to_offset
+    la t1, enter_word
+    PushDataStack t1
+    end_word
+
+word_header shift_left, "!<!<", 0, shift_right, get_enter_label_addr
+    # ( n i -- n<<i )
+    PopDataStack t1
+    PopDataStack t2
+    sll t1, t2, t1
+    PushDataStack t1
+    end_word
+
+last_vm_word: # IMPORTANT: KEEP THIS LABEL POINTING TO THE LAST VM WORD.
+word_header shift_right, "!>!>", 0, first_system_word, shift_left
+    # ( n i -- n<<i )
+    PopDataStack t1
+    PopDataStack t2
+    srl t1, t2, t1
+    PushDataStack t1
     end_word

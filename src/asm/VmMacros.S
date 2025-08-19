@@ -1,5 +1,4 @@
-
-
+.equ RAM_START, 0x80000000
 .equ CELL_SIZE, 4
 .equ DATA_STACK_MAX_SIZE, 32
 .equ RETURN_STACK_MAX_SIZE, 64
@@ -23,6 +22,12 @@
 .equ FIND_TOKEN_ERROR_BIT, 4
 .equ NUM_IO_HEX_BIT, 8   # if not set, num io is decimal
 
+.text
+
+
+.macro WordOffset word
+    .short \word - _start
+.endm
 
 .macro StackSizeElements regSize, regTemp, regOut
 li \regTemp, CELL_SIZE
@@ -145,11 +150,11 @@ div \regOut, \regSize, \regTemp
 \name\()_impl:
 .endm
 
+
+
 .macro secondary_word name
-    PushReturnStack s0
-    la s0, \name\()_ThreadBegin
-    lw t0, 0(s0)
-    jalr ra, t0, 0
+    la a0, \name\()_ThreadBegin
+    j enter_word
 \name\()_ThreadBegin:
 .endm
 
@@ -176,18 +181,19 @@ div \regOut, \regSize, \regTemp
 .endm
 
 .macro end_word
-    addi s0, s0, CELL_SIZE
-    lw t0, 0(s0)
+    addi s0, s0, 2#CELL_SIZE
+    lh t0, 0(s0)
+    add t0, t0, s6
     jalr ra, t0, 0
 .endm
 
 # Following 2 macros used to calculate branch labels within pre-compiled secondary words
 .macro CalcBranchBackToLabel label
     # ASSUMES THAT 1b IS A LABEL TO THE BRANCH OR BRANCHZERO IMPLEMENTATION POINTER
-    .word - (( 1b - \label ) + 1 * CELL_SIZE)
+    .word - (( 1b - \label ) + 2)
 .endm
 
 .macro CalcBranchForwardToLabel label
     # ASSUMES THAT 1b IS A LABEL TO THE BRANCH OR BRANCHZERO IMPLEMENTATION POINTER
-    .word (( \label - 1b) - 1 * CELL_SIZE)
+    .word (( \label - 1b) - 2)
 .endm
